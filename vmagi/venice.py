@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .cloud_container import CloudModelContainer
 from . import config, sesion
 from .media_pipeline import ImagePipelineService, SeedanceVideoService
 from .privacy import NotrackProvider
@@ -88,6 +89,7 @@ class Venice:
         self._privacy = NotrackProvider()
         self._image = ImagePipelineService(self._privacy)
         self._video = SeedanceVideoService(self._privacy)
+        self._cloud = CloudModelContainer(self)
 
     # ---------------------------------------------------------- puerta
 
@@ -101,6 +103,11 @@ class Venice:
 
     def etiqueta_provider_chat(self) -> str:
         return "venice-guest (activo)" if self.sesion_activa() else "venice-guest (inactivo)"
+
+    def etiqueta_container(self) -> str:
+        if config.cloud_only_mode():
+            return self._cloud.etiqueta_container()
+        return "hybrid-local-cloud"
 
     async def _abrir(self) -> sesion.Puerta:
         p = self._asegura_puerta()
@@ -215,11 +222,38 @@ class Venice:
     async def imagen(self, prompt: str, *, refs: list[Path] | None = None,
                      aspect_ratio: str = "1:1", seed: int | None = None,
                      **_) -> Path:
-        """Genera imagen HQ con backend Automatic1111 o ComfyUI."""
+        """Genera imagen en modo cloud-only o híbrido según configuración."""
+        if config.cloud_only_mode():
+            return await self._cloud.imagen(
+                prompt, aspect_ratio=aspect_ratio, seed=seed
+            )
         return await self._image.generar(prompt, refs=refs,
                                          aspect_ratio=aspect_ratio, seed=seed,
                                          quality=_.get("quality"),
                                          backend=_.get("backend"))
+
+    async def _imagen_guest(self, prompt: str, *, aspect_ratio: str = "1:1",
+                            seed: int | None = None) -> Path:
+        _ = (aspect_ratio, seed)
+        p = await self._abrir()
+        texto = (f"Genera UNA imagen, sin texto, aspect ratio {aspect_ratio}: {prompt}")
+        ultimo = None
+        for _ in range(2):
+            conocidas = await asyncio.to_thread(
+                _lectura_segura, p, lambda: p.pg.locator("img").evaluate_all(
+                    _JS_ATRS))
+            await asyncio.to_thread(p.llamar, lambda: p.enviar(texto))
+            try:
+                ruta = await asyncio.to_thread(self._espera_imagen, p,
+                                               conocidas, 240.0)
+                await self._tantea_cupo()
+                return ruta
+            except sesion.ModalDeLogin as e:
+                ultimo = e
+        raise CupoDiarioAgotado(
+            "Venice pidió iniciar sesión tras reintentar como Guest: el "
+            "cupo diario (por IP) se ha agotado hoy. Vuelve mañana."
+        ) from ultimo
 
     @_traduce_cierre
     def _espera_imagen(self, p: sesion.Puerta, conocidas: list,
@@ -278,10 +312,20 @@ class Venice:
     # ------------------------------------------------------------ vídeo
 
     async def video(self, prompt: str, **_) -> Path:
+        if config.cloud_only_mode():
+            return await self._cloud.video(prompt, **_)
         return await self._video.generar(
             prompt,
             duration=_.get("duration", "10s"),
             ref_urls=_.get("ref_urls"),
+        )
+
+    @staticmethod
+    def _error_video_cloud_only() -> VeniceError:
+        return VeniceError(
+            "Modo cloud-only activo: vídeo gratis sin key/login no está "
+            "disponible en el proveedor guest actual. "
+            "El sistema no usa modelos locales ni bypass de cuotas."
         )
 
     # ----------------------------------------------------------- modelos

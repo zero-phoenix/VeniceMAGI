@@ -31,6 +31,7 @@ CONSENTS_SEEDANCE = {
 ASPECTOS_VALIDOS = ("1:1", "16:9", "9:16", "4:3", "3:4")
 BACKENDS_IMAGEN = ("automatic1111", "comfyui")
 CALIDADES_IMAGEN = ("draft", "standard", "ultra")
+MODOS_SISTEMA = ("cloud", "hybrid")
 
 
 def data_dir() -> Path:
@@ -136,6 +137,30 @@ def guardar_notrack_obligatorio(valor: bool) -> bool:
     d["notrack_required"] = bool(valor)
     _escribe_config(d)
     return bool(valor)
+
+
+def cloud_only_mode() -> bool:
+    m = (os.environ.get("CLOUD_ONLY_MODE", "").strip().lower()
+         or str(_lee_config().get("system_mode", "cloud")).strip().lower())
+    if m in ("1", "true", "on", "cloud"):
+        return True
+    if m in ("0", "false", "off", "hybrid"):
+        return False
+    return True
+
+
+def system_mode() -> str:
+    return "cloud" if cloud_only_mode() else "hybrid"
+
+
+def guardar_system_mode(valor: str) -> str:
+    m = (valor or "").strip().lower()
+    if m not in MODOS_SISTEMA:
+        raise ValueError("modo inválido: usa cloud o hybrid")
+    d = _lee_config()
+    d["system_mode"] = m
+    _escribe_config(d)
+    return m
 
 
 def backend_imagen() -> str:

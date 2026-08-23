@@ -69,9 +69,10 @@ set NOTRACK_REQUIRED=1
 VeniceMAGI.exe
 crea un script que ordene una carpeta por extensiones     → ronda completa
 /imagen --ar 16:9 --seed 42 --quality ultra una catedral gótica al amanecer
-/imagen --backend comfyui retrato editorial hiperrealista
+/modo cloud
 /video --duration 10s vuelo cinemático sobre venecia
-/backend comfyui
+/modo hybrid
+/backend automatic1111
 /quality ultra
 /notrack http://127.0.0.1:8080
 /notrack required on
@@ -82,19 +83,20 @@ crea un script que ordene una carpeta por extensiones     → ronda completa
 Variables clave para imagen/vídeo:
 
 ```
-set IMAGE_BACKEND=automatic1111              # o comfyui
+set CLOUD_ONLY_MODE=1                        # por defecto: solo cloud guest
+set IMAGE_BACKEND=automatic1111              # solo si usas /modo hybrid
 set AUTOMATIC1111_URL=http://127.0.0.1:7860
 set COMFYUI_URL=http://127.0.0.1:8188
 set COMFYUI_WORKFLOW=C:\ruta\workflow.json
 set SDXL_CHECKPOINT=Realism Engine SDXL
 set LORAS_JSON=[{"name":"mi-lora","weight":0.8}]
 set IMAGE_QUALITY=ultra                      # draft|standard|ultra
-set VENICE_API_KEY=tu_clave
-set SEEDANCE_MODEL=seedance-2.5-text-to-video
+set SEEDANCE_MODEL=seedance-2.5-text-to-video # solo si usas /modo hybrid
 ```
 
 Cada render guarda metadata reproducible en sidecar `*.json` junto al artefacto.
 Al cambiar `/notrack` el sistema cierra la puerta actual y aplica la nueva ruta en la siguiente sesión.
+En `cloud-only` no se usan modelos locales ni claves API: el contenedor virtual enruta a proveedores guest permitidos.
 
 ## Release (descarga del exe comprimido)
 

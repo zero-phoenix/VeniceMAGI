@@ -12,6 +12,7 @@
 - Generación de imagen HQ por `automatic1111` o `comfyui` con control de `--ar`, `--seed`, `--quality`, `--backend`.
 - Vídeo solo con Seedance 2.5+ (`/video --duration 10s ...`).
 - Integración runtime de notrack (`/notrack`) y preferencias persistentes (`/backend`, `/quality`).
+- Modo `cloud-only` por defecto con contenedor virtual local (`/modo cloud|hybrid`).
 - Metadata reproducible por render (`*.json`) e índice persistente en SQLite.
 
 ## Descarga e instalación

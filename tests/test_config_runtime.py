@@ -40,3 +40,11 @@ def test_normaliza_aspect_duration():
         config.normaliza_aspect_ratio("2:1")
     with pytest.raises(ValueError):
         config.normaliza_duration("abc")
+
+
+def test_cloud_only_default_y_modo_runtime(monkeypatch, tmp_path):
+    monkeypatch.setenv("VENICE_MAGI_DIR", str(tmp_path / "d"))
+    monkeypatch.delenv("CLOUD_ONLY_MODE", raising=False)
+    assert config.cloud_only_mode() is True
+    config.guardar_system_mode("hybrid")
+    assert config.system_mode() == "hybrid"

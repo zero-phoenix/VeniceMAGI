@@ -139,6 +139,7 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
             "/salud         healthchecks de integración",
             "/historial [n] últimas rondas",
             "/galeria [n]   últimos artefactos",
+            "/modo [cloud|hybrid] ver/cambiar modo operativo",
             "/backend [automatic1111|comfyui] ver/cambiar backend de imagen",
             "/quality [draft|standard|ultra] ver/cambiar calidad de imagen",
             "/notrack show|off|URL|required on|required off",
@@ -162,6 +163,7 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
         s = health.estado_salud()
         _p("SYS", "\n".join([
             f"global: {'OK' if s['ok_global'] else 'REVISAR'}",
+            f"modo cloud-only: {'ON' if s['cloud_only_mode'] else 'OFF'}",
             f"edge: {'OK' if s['edge_disponible'] else 'FALLO'}",
             f"notrack: {'OK' if (s['notrack_configurado'] or not s['notrack_obligatorio']) else 'FALLO'}",
             f"backend imagen: {s['backend_imagen']} ({'OK' if s['backend_imagen_ok'] else 'FALLO'})",
@@ -198,6 +200,9 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
         else:
             _p("SYS", "galería:\n  " + "\n  ".join(rutas[:n]))
     elif cmd == "/backend":
+        if config.cloud_only_mode():
+            _p("NAOKO", "modo cloud-only activo: /backend local está deshabilitado")
+            return False
         if len(partes) > 1:
             try:
                 b = config.guardar_backend_imagen(partes[1])
@@ -206,6 +211,16 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
                 _p("NAOKO", str(e))
         else:
             _p("SYS", f"backend actual: {config.backend_imagen()}")
+    elif cmd == "/modo":
+        if len(partes) > 1:
+            try:
+                modo = config.guardar_system_mode(partes[1])
+                await v.cerrar()
+                _p("SYS", f"modo operativo: {modo} (aplicado a la próxima sesión)")
+            except ValueError as e:
+                _p("NAOKO", str(e))
+        else:
+            _p("SYS", f"modo operativo actual: {config.system_mode()}")
     elif cmd == "/quality":
         if len(partes) > 1:
             try:
@@ -375,8 +390,10 @@ async def _panel_magi(v: Venice) -> None:
     chat = v.etiqueta_provider_chat()
     _p("SYS", "\n".join([
         "=== MAGI PANEL ===",
+        f"container: {v.etiqueta_container()}",
+        f"system mode: {config.system_mode()}",
         f"chat provider: {chat}",
-        f"image backend: {config.backend_imagen()}",
+        f"image backend: {config.backend_imagen() if not config.cloud_only_mode() else 'venice-guest-free'}",
         f"video backend: {config.modelo_video_seedance()}",
         f"notrack proxy: {config.notrack_proxy() or '(no configurado)'}",
         f"notrack required: {'on' if config.notrack_obligatorio() else 'off'}",
