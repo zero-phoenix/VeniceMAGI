@@ -144,7 +144,7 @@ class Puerta:
             "viewport": {"width": 1100, "height": 800},
             "args": ["--disable-blink-features=AutomationControlled"],
         }
-        px = config.proxy()
+        px = config.proxy() or config.notrack_proxy()
         if px:
             kwargs["proxy"] = {"server": px}
         return kwargs

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import config, sesion
+from .media_pipeline import ImagePipelineService, SeedanceVideoService
+from .privacy import NotrackProvider
 
 
 class VeniceError(Exception):
@@ -83,6 +85,9 @@ class Venice:
     def __init__(self, progreso=None):
         self._progreso = progreso or (lambda m: None)
         self._puerta: sesion.Puerta | None = None
+        self._privacy = NotrackProvider()
+        self._image = ImagePipelineService(self._privacy)
+        self._video = SeedanceVideoService(self._privacy)
 
     # ---------------------------------------------------------- puerta
 
@@ -90,6 +95,12 @@ class Venice:
         if self._puerta is None:
             self._puerta = sesion.Puerta(self._progreso)
         return self._puerta
+
+    def sesion_activa(self) -> bool:
+        return self._puerta is not None and self._puerta.pg is not None
+
+    def etiqueta_provider_chat(self) -> str:
+        return "venice-guest (activo)" if self.sesion_activa() else "venice-guest (inactivo)"
 
     async def _abrir(self) -> sesion.Puerta:
         p = self._asegura_puerta()
@@ -201,30 +212,14 @@ class Venice:
 
     # ----------------------------------------------------------- imagen
 
-    async def imagen(self, prompt: str, *, destino: Path | None = None,
+    async def imagen(self, prompt: str, *, refs: list[Path] | None = None,
+                     aspect_ratio: str = "1:1", seed: int | None = None,
                      **_) -> Path:
-        """Genera una imagen pidiéndola en el chat del Guest."""
-        p = await self._abrir()
-        texto = (f"Genera UNA imagen, sin texto: {prompt}")
-        ultimo = None
-        for _ in range(2):
-            # Muestrear ANTES de enviar: el Enter navega y destruye el
-            # contexto de ejecución del muestreo.
-            conocidas = await asyncio.to_thread(
-                _lectura_segura, p, lambda: p.pg.locator("img").evaluate_all(
-                    _JS_ATRS))
-            await asyncio.to_thread(p.llamar, lambda: p.enviar(texto))
-            try:
-                ruta = await asyncio.to_thread(self._espera_imagen, p,
-                                               conocidas, 240.0)
-                await self._tantea_cupo()
-                return ruta
-            except sesion.ModalDeLogin as e:
-                ultimo = e
-        raise CupoDiarioAgotado(
-            "Venice pidió iniciar sesión tras reintentar como Guest: el "
-            "cupo diario (por IP) se ha agotado hoy. Vuelve mañana."
-        ) from ultimo
+        """Genera imagen HQ con backend Automatic1111 o ComfyUI."""
+        return await self._image.generar(prompt, refs=refs,
+                                         aspect_ratio=aspect_ratio, seed=seed,
+                                         quality=_.get("quality"),
+                                         backend=_.get("backend"))
 
     @_traduce_cierre
     def _espera_imagen(self, p: sesion.Puerta, conocidas: list,
@@ -274,17 +269,20 @@ class Venice:
             destino.write_bytes(base64.b64decode(src.split(",", 1)[1]))
         else:
             import httpx
-            r = httpx.get(src, timeout=60, follow_redirects=True)
+            px = config.notrack_proxy()
+            kw = {"proxy": px} if px else {}
+            r = httpx.get(src, timeout=60, follow_redirects=True, **kw)
             destino.write_bytes(r.content)
         return destino
 
     # ------------------------------------------------------------ vídeo
 
     async def video(self, prompt: str, **_) -> Path:
-        raise VeniceError(
-            "Venice reserva el vídeo para cuentas Pro/clave: el Guest no "
-            "lo genera. La imagen sí funciona (/imagen). Para vídeo: "
-            "cuenta Venice Pro o clave de API (venice.ai/settings/api).")
+        return await self._video.generar(
+            prompt,
+            duration=_.get("duration", "10s"),
+            ref_urls=_.get("ref_urls"),
+        )
 
     # ----------------------------------------------------------- modelos
 

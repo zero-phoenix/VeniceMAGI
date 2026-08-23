@@ -33,8 +33,8 @@ recogen las respuestas e imágenes.
 |---|---|
 | Chat (todo el enjambre) | ✅ Guest, verificado E2E |
 | Crear ficheros y ejecutar código | ✅ local, sin Venice |
-| **Imagen** | ✅ vía chat del Guest (requiere cupo del día) |
-| **Vídeo** | ❌ Venice lo reserva a cuentas Pro / clave de API. Naoko lo explica al pedirlo |
+| **Imagen** | ✅ pipeline HQ por backend `automatic1111` o `comfyui` |
+| **Vídeo** | ✅ solo Seedance 2.5+ (requiere `VENICE_API_KEY`) |
 | Cupo | El Guest tiene ración **diaria por IP**. Agotada, Venice pide login: el sistema lo dice y no se esquiva |
 
 «Sin raciones nuestras» significa que VeniceMAGI no añade ningún límite
@@ -55,15 +55,56 @@ rota IPs y no reconecta al agotarse el cupo — la ración diaria del servicio
 gratuito se respeta y se explica. Eludirla con rotación de IP te expone a
 que Venice bloquee el rango entero de tu proveedor.
 
+Además, para tráfico HTTP compatible, VeniceMAGI puede enrutar por
+**notrack.ai** con:
+
+```
+set NOTRACK_PROXY=http://127.0.0.1:8080
+set NOTRACK_REQUIRED=1
+```
+
 ## Uso
 
 ```
 VeniceMAGI.exe
 crea un script que ordene una carpeta por extensiones     → ronda completa
-/imagen una catedral gótica al amanecer                   → PNG en media\
+/imagen --ar 16:9 --seed 42 --quality ultra una catedral gótica al amanecer
+/imagen --backend comfyui retrato editorial hiperrealista
+/video --duration 10s vuelo cinemático sobre venecia
+/backend comfyui
+/quality ultra
+/notrack http://127.0.0.1:8080
+/notrack required on
 /sesion                                                   → renueva el Guest
-/estado  /historial  /refs  /ayuda  /salir
+/magi  /salud  /estado  /historial  /galeria  /refs  /ayuda  /salir
 ```
+
+Variables clave para imagen/vídeo:
+
+```
+set IMAGE_BACKEND=automatic1111              # o comfyui
+set AUTOMATIC1111_URL=http://127.0.0.1:7860
+set COMFYUI_URL=http://127.0.0.1:8188
+set COMFYUI_WORKFLOW=C:\ruta\workflow.json
+set SDXL_CHECKPOINT=Realism Engine SDXL
+set LORAS_JSON=[{"name":"mi-lora","weight":0.8}]
+set IMAGE_QUALITY=ultra                      # draft|standard|ultra
+set VENICE_API_KEY=tu_clave
+set SEEDANCE_MODEL=seedance-2.5-text-to-video
+```
+
+Cada render guarda metadata reproducible en sidecar `*.json` junto al artefacto.
+Al cambiar `/notrack` el sistema cierra la puerta actual y aplica la nueva ruta en la siguiente sesión.
+
+## Release (descarga del exe comprimido)
+
+En cada tag `v*.*.*`, GitHub Actions:
+1. Ejecuta tests.
+2. Compila `VeniceMAGI.exe`.
+3. Crea `VeniceMAGI-<tag>.zip` (con el exe dentro).
+4. Publica `CHECKSUMS.txt`.
+
+Descarga el zip en Releases y descomprímelo para usar el exe.
 
 - Artefactos: `%LOCALAPPDATA%\VeniceMAGI\workspace` y `...\media`.
 - Requisito: **Microsoft Edge** instalado (estándar en Windows).
@@ -74,7 +115,7 @@ crea un script que ordene una carpeta por extensiones     → ronda completa
 
 ```
 python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m pytest tests/ -q        # 11 tests, sin red
+.venv\Scripts\python -m pytest tests/ -q        # tests offline
 .venv\Scripts\pyinstaller VeniceMAGI.spec --noconfirm
 ```
 

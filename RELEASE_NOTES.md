@@ -1,32 +1,25 @@
-# VeniceMAGI v1.1.0 — tu VPN, tú; el resto igual de honesto
+# VeniceMAGI — Release Windows
 
-## Nuevo: soporte de proxy/VPN propio
+## Qué incluye esta release
 
-`/proxy socks5://127.0.0.1:9050` enruta **solo la ventana del Guest** por
-el proxy o VPN que ya tengas en tu máquina (también `VENICE_PROXY` en el
-entorno, o `/proxy off` para volver a tu red normal). Es tu red y tu
-privacidad — VeniceMAGI no instala VPNs, no rota IPs y no reconecta al
-agotarse el cupo: la ración diaria del servicio gratuito se respeta y se
-explica, con un test que vigila que ningún mecanismo de evasión entre en
-el paquete.
+- `VeniceMAGI-<tag>.zip` con `VeniceMAGI.exe` dentro.
+- `CHECKSUMS.txt` con SHA256 de zip y exe.
+- Pipeline verificado en CI: tests + compilación + validación de contenido del zip.
 
-## Lo que es VeniceMAGI
+## Cambios principales
 
-La variante de MAGI donde **la única IA es Venice**, sin cuenta, sin clave
-y sin login: el modo Guest de la web (verificado endpoint a endpoint),
-operado desde una ventana de Edge con perfil propio.
+- Interfaz unificada estilo MAGI (`/magi`, `/salud`, `/galeria`).
+- Generación de imagen HQ por `automatic1111` o `comfyui` con control de `--ar`, `--seed`, `--quality`, `--backend`.
+- Vídeo solo con Seedance 2.5+ (`/video --duration 10s ...`).
+- Integración runtime de notrack (`/notrack`) y preferencias persistentes (`/backend`, `/quality`).
+- Metadata reproducible por render (`*.json`) e índice persistente en SQLite.
 
-- **Enjambre completo con un solo motor**: Naoko clasifica, Melchior
-  construye (ficheros reales, ejecuta código, imagen), Balthasar refuta
-  EJECUTANDO lo construido, Casper sintetiza. Ronda real verificada E2E.
-- **Robustez medida**: sesión Guest que caduca → reentrada automática;
-  respuestas eco (<40 caracteres útiles) nunca cuentan como respuesta;
-  ventana cerrada → mensaje claro; imagen sin llegar → captura
-  diagnóstica de la página.
-- **Vídeo**: reservado por Venice a cuentas Pro/API; Naoko lo explica.
+## Descarga e instalación
 
-## Instalación
+1. Descarga `VeniceMAGI-<tag>.zip` desde Assets.
+2. Verifica checksum:
+   `certutil -hashfile VeniceMAGI-<tag>.zip SHA256`
+3. Compara con `CHECKSUMS.txt`.
+4. Descomprime y ejecuta `VeniceMAGI.exe`.
 
-Descarga `VeniceMAGI-vX.Y.Z.zip`, descomprime y ejecuta `VeniceMAGI.exe`.
-Requisito: Microsoft Edge. Verifica la descarga contra `CHECKSUMS.txt`
-(`certutil -hashfile <zip> SHA256`).
+Requisito: Microsoft Edge en Windows.
