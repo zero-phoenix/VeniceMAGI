@@ -1,0 +1,70 @@
+name: Build and Release VeniceMAGI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta a publicar (debe existir como tag git)'
+        required: true
+        default: 'v1.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.RELEASE_TAG }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Sin tests verdes no hay release — la misma regla que MAGI.
+    - name: Suite de tests
+      run: python -m pytest tests/ -q
+
+    - name: Compilar VeniceMAGI.exe
+      run: python -m PyInstaller VeniceMAGI.spec --noconfirm
+
+    - name: Comprobar que el exe existe y pesa razonable
+      run: |
+        $mb = [math]::Round((Get-Item "dist/VeniceMAGI.exe").Length / 1MB, 1)
+        Write-Host "exe: $mb MB"
+        if ($mb -lt 20) { throw "el exe pesa $mb MB: playwright no entró" }
+
+    - name: Zip y checksums
+      run: |
+        Compress-Archive -Path "dist/VeniceMAGI.exe" -DestinationPath "dist/VeniceMAGI-$env:RELEASE_TAG.zip" -Force
+        $h1 = (Get-FileHash "dist/VeniceMAGI-$env:RELEASE_TAG.zip" -Algorithm SHA256).Hash.ToLower()
+        $h2 = (Get-FileHash "dist/VeniceMAGI.exe" -Algorithm SHA256).Hash.ToLower()
+        "$h1  VeniceMAGI-$env:RELEASE_TAG.zip" | Out-File dist/CHECKSUMS.txt -Encoding ascii -Append
+        "$h2  VeniceMAGI.exe" | Out-File dist/CHECKSUMS.txt -Encoding ascii -Append
+        Get-Content dist/CHECKSUMS.txt
+
+    - name: Crear release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: "VeniceMAGI ${{ env.RELEASE_TAG }}"
+        files: |
+          dist/VeniceMAGI-${{ env.RELEASE_TAG }}.zip
+          dist/CHECKSUMS.txt
+        body_path: RELEASE_NOTES.md
+        draft: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
