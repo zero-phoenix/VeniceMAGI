@@ -1,99 +1,130 @@
 # VeniceMAGI
 
-La variante de MAGI donde **la única IA es [Venice](https://venice.ai)** —
-**sin cuenta, sin clave, sin login**: el modo Guest de la web, manejado por
-el enjambre. **v2: ventana propia de aplicación, IDE completa sobre TU
-hardware, y la puerta de Edge aparcada fuera de pantalla.**
+VeniceMAGI es una variante MAGI con operacion cloud-first gratuita: usa proveedores guest sin key/login en el camino principal y mantiene una arquitectura de contenedor virtual local para orquestar capacidades.
+
+## v2.0.0 — ventana propia e IDE sobre tu hardware
+
+- **GUI de aplicación** (pywebview): hilo del enjambre en vivo (Melchior,
+  Balthasar, Casper, Naoko), workspace con árbol y editor, galería de
+  medios, estado y cola de trabajo. `VeniceMAGI.exe` abre la ventana;
+  `--consola` mantiene el REPL.
+- **Puerta de Edge aparcada** fuera de pantalla por defecto (toggle en la
+  GUI): el navegador real sigue resolviendo la atestación, sin estorbar.
+- **IDE real**: `read_file`, `list_dir`, `patch_file` quirúrgico,
+  `delete_file` a papelera con journal, `hardware_info` (CPU/RAM/GPU/disco),
+  `run_python` con plazo y **`shell` solo con tu aprobación clic a clic**.
+- **Vídeo de planos**: planos como imágenes Venice + mp4 compuesto EN TU PC
+  con ffmpeg (honesto: planos con fundidos, no vídeo AI fluido).
+- **Ración visible**: contador de llamadas de hoy y caché LRU para que
+  repetir no gaste cupo.
+
+## Principios del sistema
+
+- Sin cuenta ni key obligatoria en modo `cloud`.
+- Sin evasion de cuotas (no rotacion automatica de IP/VPN).
+- Transparencia: si el proveedor guest limita, se informa.
+- Trazabilidad: cada render guarda metadata reproducible.
+
+## Arquitectura actual
 
 ```
-TU PETICIÓN → NAOKO clasifica (Venice)
-            → MELCHIOR construye (Venice): ficheros, código, imagen
-            → BALTHASAR refuta EJECUTANDO lo construido (Venice)
-            → CASPER sintetiza y entrega (Venice)
+Usuario
+  └─ REPL MAGI (/magi, /salud, /imagen, /video, ...)
+      └─ CloudModelContainer (virtual local, sin inferencia local)
+          └─ Proveedor guest cloud permitido (actual: Venice Guest)
 ```
 
-Venice es tesis, antítesis y síntesis a la vez: mismo motor, tres contratos
-que se confrontan con evidencia ejecutada.
-
-## Cómo funciona (y por qué la ventana de Edge)
-
-Verificado endpoint a endpoint el 2026-08-16: la API oficial exige clave,
-el flujo anónimo legacy está muerto y el FAPI de Clerk pide Turnstile. La
-única vía sin credenciales es la que usa tu navegador: **el Guest de la
-web**. Y outerface solo atiende al Guest desde un navegador REAL (con
-Chromium headless responde 403 por la atestación de cliente).
-
-Por eso VeniceMAGI abre una **ventana de Edge** (el Edge de tu máquina,
-perfil propio, nunca tu perfil personal): es literalmente Venice Guest en
-tu pantalla, operado por el enjambre. Ahí se escriben los prompts y se
-recogen las respuestas e imágenes.
-
-## Lo que puede y lo que no — dicho claro
-
-| Capacidad | Estado |
-|---|---|
-| Chat (todo el enjambre) | ✅ Guest, verificado E2E |
-| Crear ficheros y ejecutar código | ✅ local, sin Venice |
-| **Imagen** | ✅ vía chat del Guest (requiere cupo del día) |
-| **Vídeo** | ❌ Venice lo reserva a cuentas Pro / clave de API. Naoko lo explica al pedirlo |
-| Cupo | El Guest tiene ración **diaria por IP**. Agotada, Venice pide login: el sistema lo dice y no se esquiva |
-
-«Sin raciones nuestras» significa que VeniceMAGI no añade ningún límite
-encima de los de Venice; los de Venice se respetan y se explican.
-
-## Tu propia VPN o proxy (opcional)
-
-Si usas una VPN o un proxy en tu máquina, puedes enrutar por él **solo la
-ventana del Guest**:
+Roles MAGI:
 
 ```
-/proxy socks5://127.0.0.1:9050     # o http://host:puerto
-/proxy off                          # volver a tu red normal
+NAOKO      clasifica
+MELCHIOR   construye
+BALTHASAR  refuta ejecutando
+CASPER     sintetiza
 ```
 
-Es tu red y tu privacidad, y ahí se queda: VeniceMAGI no instala VPNs, no
-rota IPs y no reconecta al agotarse el cupo — la ración diaria del servicio
-gratuito se respeta y se explica. Eludirla con rotación de IP te expone a
-que Venice bloquee el rango entero de tu proveedor.
+## Modos operativos
 
-## v2.0.0 — de REPL a IDE
+### 1) `cloud` (por defecto)
+- `CLOUD_ONLY_MODE=1`
+- Chat e imagen via proveedor guest cloud.
+- Sin modelos locales de inferencia.
+- Sin key/login en el camino principal.
+- Video depende de capacidad guest disponible.
 
-- **Ventana propia** (pywebview): hilo del enjambre en vivo con los cuatro
-  roles, workspace con árbol y editor, galería de medios, panel de estado
-  y cola de trabajo.
-- **Puerta aparcada**: el Edge del Guest sigue existiendo (sin él no hay
-  sesión sin clave) pero fuera de pantalla; un botón lo muestra si quieres.
-- **IDE sobre tu hardware**: read/patch/delete (con papelera + journal),
-  run_python con plazo, `hardware_info` (CPU/RAM/GPU/disco), y `shell`
-  SOLO con tu aprobación clic a clic en la GUI.
-- **Vídeo de planos**: Venice reserva el vídeo AI a Pro; VeniceMAGI genera
-  los planos como imágenes y **compone el mp4 en tu PC con ffmpeg**
-  (honesto: planos con fundidos, no vídeo AI fluido).
-- **Ración diaria visible**: contador de llamadas de hoy y caché LRU para
-  que las repeticiones no gasten cupo.
+### 2) `hybrid` (opcional)
+- Permite backends locales de imagen (`automatic1111`/`comfyui`) y rutas adicionales.
+- Se activa con `/modo hybrid`.
 
-## Uso
+## Comandos principales
 
 ```
-VeniceMAGI.exe            → abre la ventana de la aplicación
-VeniceMAGI.exe --consola  → REPL clásico
-crea un script que ordene una carpeta por extensiones     → ronda completa
-/imagen una catedral gótica al amanecer                   → PNG en media\
-/sesion                                                   → renueva el Guest
-/estado  /historial  /refs  /ayuda  /salir
+/magi
+/salud
+/modo cloud|hybrid
+/imagen [--ar 16:9] [--seed N] [--quality draft|standard|ultra] [--backend automatic1111|comfyui] PROMPT
+/video [--duration 10s] PROMPT
+/backend [automatic1111|comfyui]
+/quality [draft|standard|ultra]
+/notrack show|off|URL|required on|required off
+/proxy URL|off
+/sesion
+/historial [n]
+/galeria [n]
+/ayuda
+/salir
 ```
 
-- Artefactos: `%LOCALAPPDATA%\VeniceMAGI\workspace` y `...\media`.
-- Requisito: **Microsoft Edge** instalado (estándar en Windows).
-- Si la sesión Guest caduca a mitad de operación, el sistema reentra solo
-  y repite tu petición.
+## Configuracion de entorno
+
+```
+set CLOUD_ONLY_MODE=1
+set NOTRACK_PROXY=http://127.0.0.1:8080
+set NOTRACK_REQUIRED=1
+
+:: solo para hybrid
+set IMAGE_BACKEND=automatic1111
+set AUTOMATIC1111_URL=http://127.0.0.1:7860
+set COMFYUI_URL=http://127.0.0.1:8188
+set COMFYUI_WORKFLOW=C:\ruta\workflow.json
+set SDXL_CHECKPOINT=Realism Engine SDXL
+set LORAS_JSON=[{"name":"mi-lora","weight":0.8}]
+set IMAGE_QUALITY=ultra
+set SEEDANCE_MODEL=seedance-2.5-text-to-video
+```
+
+## Artefactos y reproducibilidad
+
+- Workspace: `%LOCALAPPDATA%\VeniceMAGI\workspace`
+- Media: `%LOCALAPPDATA%\VeniceMAGI\media`
+- Historial: `%LOCALAPPDATA%\VeniceMAGI\historial.db`
+- Metadata por render: `archivo.ext.json` junto al artefacto
+
+## Politica de red
+
+- `/proxy`: controla solo la ventana Guest.
+- `/notrack`: aplica proxy HTTP compatible a trafico del sistema.
+- Cambios de `/proxy` y `/notrack` reinician sesion para aplicar rutas.
+
+## Releases (exe comprimido)
+
+Cada tag `v*.*.*` publica en GitHub Release:
+
+1. `VeniceMAGI-<tag>.zip` (incluye `VeniceMAGI.exe`)
+2. `CHECKSUMS.txt` (SHA256)
+3. Notas de release en [RELEASE_NOTES.md](C:/Users/D/github-private-review/VeniceMAGI/RELEASE_NOTES.md)
+
+Flujo recomendado:
+
+1. Descargar zip desde Assets.
+2. Verificar SHA256 con `CHECKSUMS.txt`.
+3. Descomprimir y ejecutar `VeniceMAGI.exe`.
 
 ## Desarrollo
 
 ```
-python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m pytest tests/ -q        # 11 tests, sin red
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m pytest tests/ -q
 .venv\Scripts\pyinstaller VeniceMAGI.spec --noconfirm
 ```
-
-Proyecto independiente de MAGI System IDE. Local y privado: nada de GitHub.

@@ -12,7 +12,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .cloud_container import CloudModelContainer
 from . import config, sesion
+from .media_pipeline import ImagePipelineService, SeedanceVideoService
+from .privacy import NotrackProvider
 
 
 class VeniceError(Exception):
@@ -104,6 +107,11 @@ class Venice:
         #: ración vista desde fuera: cuántos chats REALES (sin caché) hoy
         self.hoy = time.strftime("%Y-%m-%d")
         self.llamadas_hoy = 0
+        # servicios del pipeline HQ del usuario (A1111/ComfyUI + Seedance)
+        self._privacy = NotrackProvider()
+        self._image = ImagePipelineService(self._privacy)
+        self._video = SeedanceVideoService(self._privacy)
+        self._cloud = CloudModelContainer(self)
 
     # ---------------------------------------------------------- puerta
 
@@ -111,6 +119,17 @@ class Venice:
         if self._puerta is None:
             self._puerta = sesion.Puerta(self._progreso)
         return self._puerta
+
+    def sesion_activa(self) -> bool:
+        return self._puerta is not None and self._puerta.pg is not None
+
+    def etiqueta_provider_chat(self) -> str:
+        return "venice-guest (activo)" if self.sesion_activa() else "venice-guest (inactivo)"
+
+    def etiqueta_container(self) -> str:
+        if config.cloud_only_mode():
+            return self._cloud.etiqueta_container()
+        return "hybrid-local-cloud"
 
     async def _abrir(self) -> sesion.Puerta:
         p = self._asegura_puerta()
@@ -228,15 +247,26 @@ class Venice:
 
     # ----------------------------------------------------------- imagen
 
-    async def imagen(self, prompt: str, *, destino: Path | None = None,
+    async def imagen(self, prompt: str, *, refs: list[Path] | None = None,
+                     aspect_ratio: str = "1:1", seed: int | None = None,
                      **_) -> Path:
-        """Genera una imagen pidiéndola en el chat del Guest."""
+        """Genera imagen en modo cloud-only o híbrido según configuración."""
+        if config.cloud_only_mode():
+            return await self._cloud.imagen(
+                prompt, aspect_ratio=aspect_ratio, seed=seed
+            )
+        return await self._image.generar(prompt, refs=refs,
+                                         aspect_ratio=aspect_ratio, seed=seed,
+                                         quality=_.get("quality"),
+                                         backend=_.get("backend"))
+
+    async def _imagen_guest(self, prompt: str, *, aspect_ratio: str = "1:1",
+                            seed: int | None = None) -> Path:
+        _ = (aspect_ratio, seed)
         p = await self._abrir()
-        texto = (f"Genera UNA imagen, sin texto: {prompt}")
+        texto = (f"Genera UNA imagen, sin texto, aspect ratio {aspect_ratio}: {prompt}")
         ultimo = None
         for _ in range(2):
-            # Muestrear ANTES de enviar: el Enter navega y destruye el
-            # contexto de ejecución del muestreo.
             conocidas = await asyncio.to_thread(
                 _lectura_segura, p, lambda: p.pg.locator("img").evaluate_all(
                     _JS_ATRS))
@@ -301,17 +331,30 @@ class Venice:
             destino.write_bytes(base64.b64decode(src.split(",", 1)[1]))
         else:
             import httpx
-            r = httpx.get(src, timeout=60, follow_redirects=True)
+            px = config.notrack_proxy()
+            kw = {"proxy": px} if px else {}
+            r = httpx.get(src, timeout=60, follow_redirects=True, **kw)
             destino.write_bytes(r.content)
         return destino
 
     # ------------------------------------------------------------ vídeo
 
     async def video(self, prompt: str, **_) -> Path:
-        raise VeniceError(
-            "Venice reserva el vídeo para cuentas Pro/clave: el Guest no "
-            "lo genera. La imagen sí funciona (/imagen). Para vídeo: "
-            "cuenta Venice Pro o clave de API (venice.ai/settings/api).")
+        if config.cloud_only_mode():
+            return await self._cloud.video(prompt, **_)
+        return await self._video.generar(
+            prompt,
+            duration=_.get("duration", "10s"),
+            ref_urls=_.get("ref_urls"),
+        )
+
+    @staticmethod
+    def _error_video_cloud_only() -> VeniceError:
+        return VeniceError(
+            "Modo cloud-only activo: vídeo gratis sin key/login no está "
+            "disponible en el proveedor guest actual. "
+            "El sistema no usa modelos locales ni bypass de cuotas."
+        )
 
     # ----------------------------------------------------------- modelos
 

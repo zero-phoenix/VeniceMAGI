@@ -8,11 +8,17 @@ on:
 jobs:
   test:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11']
+    env:
+      NOTRACK_REQUIRED: '0'
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: ${{ matrix.python-version }}
         cache: 'pip'
     - name: Instalar dependencias
       run: |
@@ -21,3 +27,7 @@ jobs:
     # Los tests no tocan la red ni abren Edge: FakeVenice y _kwargs_lanzamiento.
     - name: Suite de tests
       run: python -m pytest tests/ -q
+
+    # La GUI sin abrir ventana: servidor local y endpoints vivos.
+    - name: Selftest de la GUI
+      run: python -m vmagi.app --selftest

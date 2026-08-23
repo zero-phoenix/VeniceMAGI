@@ -9,7 +9,7 @@ on:
       tag:
         description: 'Etiqueta a publicar (debe existir como tag git)'
         required: true
-        default: 'v1.1.0'
+        default: 'v1.2.2'
 
 permissions:
   contents: write
@@ -50,11 +50,21 @@ jobs:
     - name: Zip y checksums
       run: |
         Compress-Archive -Path "dist/VeniceMAGI.exe" -DestinationPath "dist/VeniceMAGI-$env:RELEASE_TAG.zip" -Force
+        Expand-Archive -Path "dist/VeniceMAGI-$env:RELEASE_TAG.zip" -DestinationPath "dist/check-zip" -Force
+        if (-not (Test-Path "dist/check-zip/VeniceMAGI.exe")) { throw "El zip no contiene VeniceMAGI.exe" }
         $h1 = (Get-FileHash "dist/VeniceMAGI-$env:RELEASE_TAG.zip" -Algorithm SHA256).Hash.ToLower()
         $h2 = (Get-FileHash "dist/VeniceMAGI.exe" -Algorithm SHA256).Hash.ToLower()
         "$h1  VeniceMAGI-$env:RELEASE_TAG.zip" | Out-File dist/CHECKSUMS.txt -Encoding ascii -Append
         "$h2  VeniceMAGI.exe" | Out-File dist/CHECKSUMS.txt -Encoding ascii -Append
         Get-Content dist/CHECKSUMS.txt
+
+    - name: Publicar artefactos del build
+      uses: actions/upload-artifact@v4
+      with:
+        name: VeniceMAGI-${{ env.RELEASE_TAG }}-windows
+        path: |
+          dist/VeniceMAGI-${{ env.RELEASE_TAG }}.zip
+          dist/CHECKSUMS.txt
 
     - name: Crear release
       uses: softprops/action-gh-release@v2

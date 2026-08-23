@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from . import config, sesion
+from .media_pipeline import BackendImagenError, VideoSeedanceError
 from .venice import CupoDiarioAgotado, VeniceError
 
 
@@ -26,6 +27,8 @@ def explica_error(e: Exception) -> str:
                   "Venice hasta mañana. El resto (ficheros, ejecutar "
                   "código) sigue funcionando.")
     if isinstance(e, VeniceError):
+        return str(e)
+    if isinstance(e, (BackendImagenError, VideoSeedanceError)):
         return str(e)
     if isinstance(e, sesion.SesionNoDisponible):
         return ("La puerta no abrió: " + str(e)
