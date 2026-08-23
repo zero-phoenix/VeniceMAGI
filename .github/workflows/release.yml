@@ -9,7 +9,7 @@ on:
       tag:
         description: 'Etiqueta a publicar (debe existir como tag git)'
         required: true
-        default: 'v1.1.0'
+        default: 'v1.2.2'
 
 permissions:
   contents: write
