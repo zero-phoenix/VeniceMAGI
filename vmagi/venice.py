@@ -77,12 +77,33 @@ def _lectura_segura(p, fn, intentos: int = 3):
     raise VeniceError(f"la página navegó y no se dejó leer: {ultimo}")
 
 
+#: Caché LRU de chats: repetir la misma pregunta no gasta ración.
+_CACHE: dict[tuple, str] = {}
+_CACHE_MAX = 64
+
+
+def cache_consulta(clave: tuple) -> str | None:
+    v = _CACHE.get(clave)
+    if v is not None:
+        _CACHE[clave] = _CACHE.pop(clave)      # LRU: lo usado, al final
+    return v
+
+
+def cache_guarda(clave: tuple, valor: str) -> None:
+    _CACHE[clave] = valor
+    if len(_CACHE) > _CACHE_MAX:
+        _CACHE.pop(next(iter(_CACHE)))
+
+
 class Venice:
     """Cliente que habla con Venice a través de la página viva del Guest."""
 
     def __init__(self, progreso=None):
         self._progreso = progreso or (lambda m: None)
         self._puerta: sesion.Puerta | None = None
+        #: ración vista desde fuera: cuántos chats REALES (sin caché) hoy
+        self.hoy = time.strftime("%Y-%m-%d")
+        self.llamadas_hoy = 0
 
     # ---------------------------------------------------------- puerta
 
@@ -128,6 +149,12 @@ class Venice:
                 respuesta = await asyncio.to_thread(
                     self._espera_respuesta, p, previo, prompt, 120.0)
                 await self._tantea_cupo()
+                cache_guarda(clave, respuesta)
+                hoy = time.strftime("%Y-%m-%d")
+                if hoy != self.hoy:
+                    self.hoy = hoy
+                    self.llamadas_hoy = 0
+                self.llamadas_hoy += 1
                 return ChatResp(texto=respuesta, modelo="venice-guest",
                                 ms=(time.monotonic() - t0) * 1000)
             except sesion.ModalDeLogin as e:

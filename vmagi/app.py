@@ -10,6 +10,8 @@ import asyncio
 import sys
 
 from . import config, naoko, roles, sesion
+from .gui_server import GuiServer
+from .kernel import Kernel
 from .orchestrator import Orquestador, Ronda
 from .store import Historial
 from .venice import Venice
@@ -32,6 +34,85 @@ def _recorta(t: str, n: int = 1200) -> str:
 
 def _dim(t: str) -> str:
     return f"{C['DIM']}{t}{C['FIN']}"
+
+
+def arranca() -> int:
+    """Punto de entrada: GUI por defecto; --consola o --selftest aparte."""
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if "--selftest" in sys.argv:
+        return asyncio.run(selftest())
+    if "--consola" in sys.argv:
+        return asyncio.run(main())
+    try:
+        return _gui()
+    except Exception as e:                            # noqa: BLE001
+        # Sin ventana (p.ej. sin entorno gráfico): el REPL sigue vivo.
+        print(f"[SYS] GUI no disponible ({e}); arranco en consola.")
+        return asyncio.run(main())
+
+
+def _gui() -> int:
+    """Ventana propia: servidor local + kernel en su hilo + pywebview."""
+    import threading
+    import webview
+
+    async def nucleo(kernel, gui):
+        trabajador = asyncio.create_task(kernel.procesa_cola())
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+        finally:
+            trabajador.cancel()
+
+    loop = asyncio.new_event_loop()
+    v = Venice(progreso=lambda m: loop.call_soon_threadsafe(
+        lambda m=m: None))          # la GUI ya ve el progreso por eventos
+    hist = Historial(config.data_dir() / "historial.db")
+    kernel = Kernel(v, hist)
+    gui = GuiServer(kernel, loop)
+    puerto = gui.arranca()
+    print(f"[SYS] GUI en http://127.0.0.1:{puerto}", flush=True)
+
+    hilo_loop = threading.Thread(target=loop.run_forever, daemon=True)
+    hilo_loop.start()
+    loop.call_soon_threadsafe(lambda: asyncio.run_coroutine_threadsafe(
+        nucleo(kernel, gui), loop))
+
+    webview.create_window(
+        f"VeniceMAGI {config.VERSION}",
+        f"http://127.0.0.1:{puerto}", width=1360, height=860)
+    webview.start()
+    loop.call_soon_threadsafe(loop.stop)
+    gui.para()
+    hist.close()
+    return 0
+
+
+async def selftest() -> int:
+    """CI: servidor arriba, endpoints vivos, abajo. Sin red ni ventana."""
+    v = Venice()
+    hist = Historial(config.data_dir() / "historial.db")
+    kernel = Kernel(v, hist)
+    gui = GuiServer(kernel, asyncio.get_event_loop())
+    puerto = gui.arranca()
+    import httpx
+    try:
+        r = httpx.get(f"http://127.0.0.1:{puerto}/", timeout=5)
+        assert r.status_code == 200 and "VeniceMAGI" in r.text
+        for ep in ("/api/estado", "/api/workspace", "/api/medios",
+                   "/api/eventos?desde=0", "/api/historial",
+                   "/api/aprobaciones"):
+            assert httpx.get(f"http://127.0.0.1:{puerto}{ep}",
+                             timeout=5).status_code == 200, ep
+        kernel.emite("estado", mensaje="prueba")
+        d = httpx.get(f"http://127.0.0.1:{puerto}/api/eventos?desde=0",
+                      timeout=5).json()
+        assert d["eventos"], "los eventos no llegan a la GUI"
+        print(f"selftest OK en el puerto {puerto}")
+        return 0
+    finally:
+        gui.para()
+        hist.close()
 
 
 async def main() -> int:
@@ -193,4 +274,4 @@ def _refs(partes):
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(arranca())

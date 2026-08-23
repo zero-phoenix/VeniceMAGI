@@ -10,7 +10,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=_pw_bins,
-    datas=_pw_datas,
+    datas=_pw_datas + [('vmagi/web', 'vmagi/web')],
     hiddenimports=_pw_hidden,
     hookspath=[],
     hooksconfig={},

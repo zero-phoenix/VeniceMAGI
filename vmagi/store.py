@@ -6,13 +6,17 @@ puedas releer qué se construyó ayer. Nada más.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
 
 class Historial:
     def __init__(self, ruta: Path):
-        self._c = sqlite3.connect(ruta)
+        # check_same_thread=False + lock: la GUI consulta el historial
+        # desde sus hilos HTTP mientras el kernel escribe en el suyo.
+        self._c = sqlite3.connect(ruta, check_same_thread=False)
+        self._lock = threading.Lock()
         self._c.execute(
             "CREATE TABLE IF NOT EXISTS rondas ("
             " id INTEGER PRIMARY KEY,"
@@ -20,6 +24,10 @@ class Historial:
             " artefactos TEXT)")
 
     def anota(self, peticion: str, sintesis: str, artefactos: list[str]):
+        with self._lock:
+            self._anota(peticion, sintesis, artefactos)
+
+    def _anota(self, peticion: str, sintesis: str, artefactos: list[str]):
         self._c.execute(
             "INSERT INTO rondas (ts, peticion, sintesis, artefactos) "
             "VALUES (?,?,?,?)",
@@ -27,6 +35,10 @@ class Historial:
         self._c.commit()
 
     def ultimas(self, n: int = 10) -> list[dict]:
+        with self._lock:
+            return self._ultimas(n)
+
+    def _ultimas(self, n: int = 10) -> list[dict]:
         filas = self._c.execute(
             "SELECT ts, peticion, sintesis, artefactos FROM rondas "
             "ORDER BY id DESC LIMIT ?", (n,)).fetchall()

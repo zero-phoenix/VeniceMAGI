@@ -27,9 +27,10 @@ class Ronda:
 
 
 class Orquestador:
-    def __init__(self, venice: Venice, workspace):
+    def __init__(self, venice: Venice, workspace, kernel=None):
         self.v = venice
-        self.ejecutor = Ejecutor(venice, workspace)
+        #: el kernel permite a las herramientas pedir aprobación (shell)
+        self.ejecutor = Ejecutor(venice, workspace, kernel=kernel)
 
     # ---------------------------------------------------------- naoko
 

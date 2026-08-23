@@ -139,10 +139,16 @@ class Puerta:
         usuario (si lo configuró) viaja AQUÍ y solo aquí — la ventana del
         Guest se enruta por él; el resto del sistema no se toca.
         """
+        args = ["--disable-blink-features=AutomationControlled"]
+        if not config.puerta_visible():
+            # Puerta APARCADA: el Edge es real y su atestación se resuelve
+            # igual (la atestación mira el navegador, no el escritorio),
+            # pero fuera de pantalla para no estorbar la ventana propia.
+            args.append("--window-position=-32000,-32000")
         kwargs: dict = {
             "channel": "msedge", "headless": False,
             "viewport": {"width": 1100, "height": 800},
-            "args": ["--disable-blink-features=AutomationControlled"],
+            "args": args,
         }
         px = config.proxy()
         if px:

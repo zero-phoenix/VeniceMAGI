@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 NOMBRE = "VeniceMAGI"
-VERSION = "1.1.0"
+VERSION = "2.0.0"
 
 BASE_URL = "https://api.venice.ai/api/v1"
 
@@ -75,6 +75,57 @@ def guardar_proxy(valor: str | None) -> None:
 
 def _ruta_config() -> Path:
     return data_dir() / "config.json"
+
+
+def _leer_config() -> dict:
+    f = _ruta_config()
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+    return {}
+
+
+def _escribir_config(datos: dict) -> None:
+    _ruta_config().write_text(json.dumps(datos, indent=1), encoding="utf-8")
+
+
+def puerta_visible() -> bool:
+    """Modo de la puerta de Edge. Aparcada (off-screen) por defecto."""
+    import os
+    if os.environ.get("VENICE_PUERTA_VISIBLE", "").strip() in ("1", "true"):
+        return True
+    return bool(_leer_config().get("puerta_visible", False))
+
+
+def fijar_puerta_visible(valor: bool) -> None:
+    d = _leer_config()
+    d["puerta_visible"] = bool(valor)
+    _escribir_config(d)
+
+
+def permitir_shell() -> bool:
+    import os
+    if os.environ.get("VENICE_PERMITIR_SHELL", "").strip() in ("1", "true"):
+        return True
+    return bool(_leer_config().get("permitir_shell", False))
+
+
+def fijar_permitir_shell(valor: bool) -> None:
+    d = _leer_config()
+    d["permitir_shell"] = bool(valor)
+    _escribir_config(d)
+
+
+def papelera_dir() -> Path:
+    p = data_dir() / "papelera"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def journal_path() -> Path:
+    return data_dir() / "journal.jsonl"
 
 
 def workspace() -> Path:

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>VeniceMAGI</title>
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div id="aprobaciones" class="oculto">
+  <div class="caja">
+    <div class="titulo">El enjambre quiere ejecutar en TU máquina</div>
+    <pre id="ap-cmd"></pre>
+    <div class="botones">
+      <button class="ok" onclick="aprobar(true)">Aprobar</button>
+      <button class="no" onclick="aprobar(false)">Rechazar</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <span class="logo">Venice<span class="acc">MAGI</span></span>
+  <span id="estado-chip" class="chip">…</span>
+  <span class="sep"></span>
+  <button class="mini" id="btn-puerta" onclick="togglePuerta()">puerta: ?</button>
+  <button class="mini" id="btn-shell" onclick="toggleShell()">shell: ?</button>
+</header>
+
+<main>
+  <aside id="izq">
+    <div class="panel">
+      <div class="titulo">Workspace</div>
+      <div id="arbol" class="arbol"></div>
+    </div>
+    <div class="panel">
+      <div class="titulo">Medios</div>
+      <div id="galeria" class="galeria"></div>
+    </div>
+  </aside>
+
+  <section id="centro">
+    <div id="hilo" class="hilo"></div>
+    <div class="entrada">
+      <textarea id="pet" placeholder="Pide algo… (Enter envía · Shift+Enter salto)"
+        rows="3"></textarea>
+      <div class="botones">
+        <button class="ok" onclick="enviar()">Enviar</button>
+        <button onclick="prefijo('/imagen ')">Imagen</button>
+        <button onclick="prefijo('/video_planos ')">Vídeo de planos</button>
+        <span class="ayuda">video_planos: plano1 | plano2 | plano3 …</span>
+      </div>
+    </div>
+  </section>
+
+  <aside id="der">
+    <div class="panel">
+      <div class="titulo">Estado</div>
+      <div id="estado" class="estado"></div>
+    </div>
+    <div class="panel">
+      <div class="titulo">Editor
+        <span id="ed-ruta" class="dim"></span>
+        <button class="mini" onclick="guardarFichero()">guardar</button>
+      </div>
+      <textarea id="editor" class="editor" spellcheck="false"
+        placeholder="Abre un fichero del workspace…"></textarea>
+    </div>
+  </aside>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

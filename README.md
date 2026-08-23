@@ -2,7 +2,8 @@
 
 La variante de MAGI donde **la única IA es [Venice](https://venice.ai)** —
 **sin cuenta, sin clave, sin login**: el modo Guest de la web, manejado por
-el enjambre.
+el enjambre. **v2: ventana propia de aplicación, IDE completa sobre TU
+hardware, y la puerta de Edge aparcada fuera de pantalla.**
 
 ```
 TU PETICIÓN → NAOKO clasifica (Venice)
@@ -55,10 +56,27 @@ rota IPs y no reconecta al agotarse el cupo — la ración diaria del servicio
 gratuito se respeta y se explica. Eludirla con rotación de IP te expone a
 que Venice bloquee el rango entero de tu proveedor.
 
+## v2.0.0 — de REPL a IDE
+
+- **Ventana propia** (pywebview): hilo del enjambre en vivo con los cuatro
+  roles, workspace con árbol y editor, galería de medios, panel de estado
+  y cola de trabajo.
+- **Puerta aparcada**: el Edge del Guest sigue existiendo (sin él no hay
+  sesión sin clave) pero fuera de pantalla; un botón lo muestra si quieres.
+- **IDE sobre tu hardware**: read/patch/delete (con papelera + journal),
+  run_python con plazo, `hardware_info` (CPU/RAM/GPU/disco), y `shell`
+  SOLO con tu aprobación clic a clic en la GUI.
+- **Vídeo de planos**: Venice reserva el vídeo AI a Pro; VeniceMAGI genera
+  los planos como imágenes y **compone el mp4 en tu PC con ffmpeg**
+  (honesto: planos con fundidos, no vídeo AI fluido).
+- **Ración diaria visible**: contador de llamadas de hoy y caché LRU para
+  que las repeticiones no gasten cupo.
+
 ## Uso
 
 ```
-VeniceMAGI.exe
+VeniceMAGI.exe            → abre la ventana de la aplicación
+VeniceMAGI.exe --consola  → REPL clásico
 crea un script que ordene una carpeta por extensiones     → ronda completa
 /imagen una catedral gótica al amanecer                   → PNG en media\
 /sesion                                                   → renueva el Guest

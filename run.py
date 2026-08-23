@@ -1,8 +1,8 @@
-"""Lanzador de VeniceMAGI (punto de entrada del exe)."""
-import asyncio
-import sys
+"""Lanzador de VeniceMAGI (punto de entrada del exe).
 
-from vmagi.app import main
+GUI por defecto; --consola para el REPL; --selftest para el CI.
+"""
+from vmagi.app import arranca
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    raise SystemExit(arranca())

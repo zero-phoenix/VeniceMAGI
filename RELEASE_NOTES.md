@@ -1,3 +1,42 @@
+# VeniceMAGI v2.0.0 — de REPL a IDE con ventana propia
+
+## Ventana de aplicación
+
+Se acabó la consola: **GUI propia** (pywebview + servidor local) con el
+hilo del enjambre en vivo — MELCHIOR, BALTHASAR, CASPER y NAOKO con su
+color —, workspace con árbol de ficheros y editor, galería de medios,
+panel de estado y cola de trabajo visible.
+
+## El navegador, fuera de la vista (sin cerrarlo)
+
+La ventana de Edge es la puerta de la sesión Guest sin clave — sin ella
+no hay acceso gratuito (medido: headless = 403). v2 la **aparca fuera de
+pantalla**: el navegador es real, la atestación se resuelve igual, y no
+estorba. Un botón la muestra cuando quieras mirar.
+
+## Tu hardware, de verdad
+
+Herramientas nuevas para el enjambre: `read_file`, `list_dir`,
+`patch_file` (quirúrgico: exige coincidencia única), `delete_file` (a la
+papelera, con journal auditable), `hardware_info` (CPU/RAM/GPU/disco),
+`run_python` con plazo, y **`shell` solo con tu aprobación clic a clic**
+— la GUI te enseña el comando y tú decides.
+
+## Vídeo de planos (honesto)
+
+Venice reserva el vídeo AI a cuentas Pro. v2 entrega lo máximo que el
+Guest permite: el enjambre descompone la escena en planos, Venice genera
+las imágenes, y **el mp4 se compone en tu PC con ffmpeg** (fundidos
+incluidos). Es un vídeo de planos, no vídeo AI fluido — y así se llama.
+
+## Ración diaria, visible y bien gastada
+
+Contador de llamadas de hoy en el panel de estado y caché LRU: repetir
+la misma pregunta ya no gasta ración. El cupo de Venice por IP/día se
+respeta (sin rotación de IP) y se explica cuando se agota.
+
+---
+
 # VeniceMAGI v1.1.0 — tu VPN, tú; el resto igual de honesto
 
 ## Nuevo: soporte de proxy/VPN propio
