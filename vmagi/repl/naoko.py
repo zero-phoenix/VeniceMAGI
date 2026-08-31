@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from ..venice import config
 from ..venice import puerta as sesion
-from ..venice.medios import BackendImagenError, VideoSeedanceError
 from ..venice.cliente import CupoDiarioAgotado, VeniceError
+from ..venice.medios import BackendImagenError, VideoSeedanceError
 
 
 def estado_legible() -> str:

@@ -81,13 +81,13 @@ class Ejecutor:
             raise ValueError(f"ruta fuera del workspace: {ruta}")
         return p
 
-    async def ejecuta(self, l: Llamada) -> Resultado:
+    async def ejecuta(self, llamada: Llamada) -> Resultado:
         try:
-            f = getattr(self, f"_{l.herramienta}", None)
-            if f is None or l.herramienta.startswith("_"):
+            f = getattr(self, f"_{llamada.herramienta}", None)
+            if f is None or llamada.herramienta.startswith("_"):
                 return Resultado(False, salida=f"herramienta desconocida: "
-                                               f"{l.herramienta}")
-            return await f(**l.args)
+                                               f"{llamada.herramienta}")
+            return await f(**llamada.args)
         except TypeError as e:
             return Resultado(False, salida=f"argumentos inválidos: {e}")
         except Exception as e:                          # noqa: BLE001
@@ -316,8 +316,8 @@ def _gpu() -> str:
         p = subprocess.run(
             ["wmic", "path", "win32_VideoController", "get", "name"],
             capture_output=True, text=True, timeout=15)
-        lineas = [l.strip() for l in (p.stdout or "").splitlines()
-                  if l.strip() and l.strip().lower() != "name"]
+        lineas = [linea.strip() for linea in (p.stdout or "").splitlines()
+                  if linea.strip() and linea.strip().lower() != "name"]
         return " | ".join(lineas[:2]) if lineas else "desconocida"
     except Exception:                                    # noqa: BLE001
         return "desconocida"

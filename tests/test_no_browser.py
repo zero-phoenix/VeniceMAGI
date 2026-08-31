@@ -138,12 +138,6 @@ def test_los_candidatos_con_navegador_van_al_final_de_la_cola():
     intentan los últimos.
     """
     pytest.importorskip("g4f.Provider")
-    from vmagi.core.providers.backends.g4f_backend import (
-        G4FProvider,
-        _resolve,
-        _uses_browser,
-    )
-
     # La familia viene del catálogo de laboratorio (tests/conftest.py) y
     # contiene SIEMPRE un candidato con navegador y otro limpio, en ese orden.
     #
@@ -152,6 +146,11 @@ def test_los_candidatos_con_navegador_van_al_final_de_la_cola():
     # que nada avisara: una familia sin candidatos de navegador cumple
     # `marcas == sorted(marcas)` trivialmente.
     from tests.conftest import _FAMILIA_CON_NAVEGADOR
+    from vmagi.core.providers.backends.g4f_backend import (
+        G4FProvider,
+        _resolve,
+        _uses_browser,
+    )
 
     p = G4FProvider(family=_FAMILIA_CON_NAVEGADOR)
     orden = p._ordered()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import time
 from pathlib import Path
 
@@ -18,6 +19,41 @@ class BackendImagenError(RuntimeError):
 
 class VideoSeedanceError(RuntimeError):
     """Error de generación de vídeo con Seedance."""
+
+
+#: Version minima de Seedance. El vídeo del sistema es SOLO Seedance 2.5+.
+SEEDANCE_MINIMA = (2, 5)
+
+_RE_SEEDANCE = re.compile(r"seedance[-_]?v?(\d+)(?:\.(\d+))?", re.I)
+
+
+def seedance_admitido(modelo: str) -> tuple[bool, str]:
+    """¿Es este modelo un Seedance 2.5 o superior? Devuelve (sí/no, motivo).
+
+    EL FALLO QUE ESTO CIERRA
+    ========================
+    La comprobación era `"seedance-2.5" not in model and "seedance-3" not
+    in model`. Dos cadenas literales para expresar «2.5 o superior», que
+    es una comparación de versiones. Consecuencias, las dos silenciosas:
+
+      · `seedance-2.6` y `seedance-4` —versiones MÁS nuevas, exactamente
+        las que la regla quiere permitir— quedaban rechazadas, porque su
+        texto no contiene ninguna de las dos cadenas.
+      · `seedance-3` colaba `seedance-3` de cualquier variante, pero
+        también cualquier cadena que lo contuviera por accidente.
+
+    Una regla sobre versiones escrita con `in` no es una regla sobre
+    versiones: es una lista de dos nombres que envejece sola.
+    """
+    m = _RE_SEEDANCE.search(modelo or "")
+    if not m:
+        return False, ("El vídeo del sistema es solo Seedance 2.5+ y este "
+                       "modelo no es un Seedance.")
+    version = (int(m.group(1)), int(m.group(2) or 0))
+    if version < SEEDANCE_MINIMA:
+        return False, (f"Es Seedance {version[0]}.{version[1]}, y hace falta "
+                       f"{SEEDANCE_MINIMA[0]}.{SEEDANCE_MINIMA[1]} o superior.")
+    return True, ""
 
 
 def metadata_path(ruta: Path) -> Path:
@@ -231,9 +267,10 @@ class SeedanceVideoService:
                 "Para vídeo con Seedance 2.5+ necesitas VENICE_API_KEY."
             )
         model = config.modelo_video_seedance()
-        if "seedance-2.5" not in model and "seedance-3" not in model:
+        permitido, motivo = seedance_admitido(model)
+        if not permitido:
             raise VideoSeedanceError(
-                f"Modelo de vídeo no permitido: {model}. Debe ser Seedance 2.5+."
+                f"Modelo de vídeo no permitido: {model}. {motivo}"
             )
         payload = {
             "model": model,

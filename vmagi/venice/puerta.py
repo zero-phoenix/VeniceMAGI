@@ -31,6 +31,7 @@ encima de los de Venice.
 """
 from __future__ import annotations
 
+import os
 import queue
 import threading
 import time
@@ -73,14 +74,61 @@ def perfil_dir(sitio: SitioGuest | None = None) -> Path:
     return p
 
 
+#: Interruptor de proceso. Con `VENICEMAGI_SIN_PUERTA=1` la puerta no existe:
+#: `edge_disponible()` dice que no y `abrir()` se niega, sin tocar el disco ni
+#: lanzar nada.
+ENV_SIN_PUERTA = "VENICEMAGI_SIN_PUERTA"
+
+
+def puerta_deshabilitada() -> str:
+    """Motivo por el que la puerta no puede abrirse, o cadena vacía.
+
+    EL FALLO QUE ESTO CIERRA, y que solo aparece fuera de tu máquina.
+    ================================================================
+    La puerta abre un Edge REAL. Eso está bien cuando el usuario pide una
+    inferencia, y está muy mal en cualquier otro momento: en el CI del
+    2026-08-31 un test que invoca todos los handlers RPC acabó, por una
+    cadena de tres llamadas que nadie había mirado entera, abriendo un
+    navegador en un runner sin escritorio. No falló: se quedó colgado
+    124 segundos hasta que saltó el plazo global de pytest, y el CI
+    entero se cayó con un `Timeout` que no decía de dónde venía.
+
+    Un fallo que cuelga es peor que uno que revienta, porque no deja
+    diagnóstico. Así que la puerta pasa a tener DOS frenos explícitos:
+
+      · el interruptor de proceso `VENICEMAGI_SIN_PUERTA`, que el CI pone;
+      · el cortafuegos de navegador de §I.3 — si está instalado, es que
+        alguien decidió que este proceso no abre navegadores, y la puerta
+        no es una excepción a esa decisión: es exactamente el caso que la
+        decisión contempla.
+
+    Devuelve el MOTIVO y no un booleano a propósito: «no hay puerta» y
+    «la puerta está apagada porque el CI lo pidió» llevan a sitios
+    distintos, y un `False` pelado los confunde.
+    """
+    if os.environ.get(ENV_SIN_PUERTA, "").strip().lower() in ("1", "true", "on"):
+        return (f"{ENV_SIN_PUERTA} está puesto: este proceso no abre la "
+                "puerta de Edge (es lo que usan el CI y los tests).")
+    try:
+        from vmagi.core import no_browser
+        if getattr(no_browser, "_installed", False):
+            return ("el cortafuegos de navegador (§I.3) está instalado en "
+                    "este proceso: nada abre navegadores, la puerta incluida.")
+    except Exception:                                    # noqa: BLE001
+        pass
+    return ""
+
+
 def edge_disponible() -> bool:
-    """Edge presente en disco. Instantáneo: NO lanza ventanas.
+    """Edge presente en disco Y puerta permitida. Instantáneo: NO lanza nada.
 
     Lanzar el navegador solo para comprobar era lento y frágil (la ventana
     parpadeaba al arrancar y cualquier timeout se leía como «no hay Edge»).
     La comprobación real de que la puerta ARRANCA sigue en Puerta.abrir(),
     que ya lanza de verdad cuando toca.
     """
+    if puerta_deshabilitada():
+        return False
     rutas = [
         Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
         Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
@@ -135,7 +183,16 @@ class Puerta:
     # ---------------------------------------------------------- apertura
 
     def abrir(self) -> None:
-        """Abre Edge en modo Guest. Bloqueante (hilo aparte o to_thread)."""
+        """Abre Edge en modo Guest. Bloqueante (hilo aparte o to_thread).
+
+        El freno va AQUÍ y no solo en `edge_disponible()`: quien llama a
+        `abrir()` directamente —y hay tres sitios que lo hacen— se saltaría
+        una comprobación que viviera únicamente en el otro lado. Un freno
+        que depende de que todos se acuerden de pisarlo no es un freno.
+        """
+        motivo = puerta_deshabilitada()
+        if motivo:
+            raise SesionNoDisponible(f"la puerta está apagada: {motivo}")
         if self.pg is not None:
             return
         if self._hilo is None:
@@ -162,9 +219,24 @@ class Puerta:
             "viewport": {"width": 1100, "height": 800},
             "args": args,
         }
-        px = config.proxy() or config.notrack_proxy()
-        if px:
-            kwargs["proxy"] = {"server": px}
+        # LA SALIDA DEL SISTEMA MANDA SOBRE LA DE LA VENTANA.
+        #
+        # Antes la ventana del Guest tenía su propio proxy (`/proxy`) y el
+        # resto del sistema el suyo. Eso es tráfico partido: la mitad de la
+        # aplicación sale por la VPN y la otra mitad por la línea de casa,
+        # y basta una vez para correlacionar las dos rutas — con lo que la
+        # VPN deja de servir para lo único que sirve.
+        #
+        # Ahora hay UNA salida (`/vpn`, `ritsuko_red`) que gobierna las tres
+        # capas. `/proxy` sigue existiendo como ajuste local de la ventana y
+        # solo se usa si no hay salida de sistema, para no romper una
+        # configuración que ya funcionase.
+        from vmagi.modules.infrastructure.ritsuko_red import aplica_a_navegador
+        kwargs.update(aplica_a_navegador())
+        if "proxy" not in kwargs:
+            px = config.proxy() or config.notrack_proxy()
+            if px:
+                kwargs["proxy"] = {"server": px}
         return kwargs
 
     def _arranca_navegador(self) -> None:

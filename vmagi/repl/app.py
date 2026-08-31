@@ -12,14 +12,14 @@ from pathlib import Path
 
 from ..venice import config
 from ..venice import puerta as sesion
-from . import health, naoko, roles
+from ..venice.cliente import Venice
 from ..venice.medios import lee_metadata, metadata_path
+from . import health, naoko
 from .gui_server import GuiServer
 from .kernel import Kernel
 from .observability import EventLogger
 from .orchestrator import Orquestador, Ronda
 from .store import Historial
-from ..venice.cliente import Venice
 
 C = {"NAOKO": "\033[95m", "MELCHIOR": "\033[93m",
      "BALTHASAR": "\033[91m", "CASPER": "\033[92m",
@@ -130,34 +130,58 @@ async def main() -> int:
 
 
 def _vpn(args: list[str]) -> None:
-    """`/vpn` — la salida de red propia de Ritsuko, y solo la suya.
+    """`/vpn` — la salida de red de TODO el sistema.
 
-    No toca la puerta del Guest (para eso está `/proxy`) ni el tráfico del
-    sistema (`/notrack`). Aplicarla a todos convertiría una medida de
-    independencia del auditor en una de evasión de cuotas, que es
-    justamente lo que el proyecto no hace.
+    Gobierna las tres capas a la vez: el enjambre, la ventana de Edge y las
+    descargas. Que sea una sola es el punto: dos rutas distintas para el
+    mismo programa se correlacionan entre sí, y ahí se acaba el anonimato.
     """
-    from ..modules.infrastructure.ritsuko_red import salida_de_ritsuko
+    from ..modules.infrastructure.ritsuko_red import (
+        SALIDAS_CONOCIDAS,
+        salida_de_ritsuko,
+    )
 
     red = salida_de_ritsuko()
-    if not args or args[0].lower() == "estado":
+    orden = (args[0].lower() if args else "estado")
+
+    if orden in ("estado", "status"):
         e = red.estado()
         _p("SYS", "\n".join([
-            f"salida de Ritsuko: {e['salida'] or '(ninguna: sale por donde el sistema)'}",
+            f"salida: {e['salida'] or '(ninguna: sales por tu línea)'}",
             f"origen: {e['origen']}",
-            f"rotaciones rechazadas: {e['rotaciones_rechazadas']}",
-            f"política: {e['política'] if 'política' in e else e['politica']}",
+            f"alcance: {e['alcance']}",
+            f"estricto: {'ON' if e['estricta'] else 'off'}",
+            "",
+            "salidas gratuitas conocidas:",
+            *[f"  {n:<14} {u:<28} {q}" for n, u, q in SALIDAS_CONOCIDAS],
         ]))
         return
-    valor = None if args[0].lower() in ("off", "none", "no") else args[0]
+
+    if orden == "purgar":
+        b = red.purga()
+        _p("SYS", f"huella borrada: {b['perfiles']} perfiles, "
+                  f"{b['cache']} de caché, {b['logs']} logs.")
+        return
+
+    if orden == "estricto":
+        valor = len(args) > 1 and args[1].lower() in ("on", "1", "si", "true")
+        red.fija_estricta(valor)
+        red.guarda()
+        _p("SYS", "modo estricto " + ("ON: sin salida configurada el sistema "
+                                      "NO sale a la red."
+                                      if valor else
+                                      "off: sin salida, se sale por tu línea."))
+        return
+
+    valor = None if orden in ("off", "none", "no") else args[0]
     try:
         red.fija(valor, origen="usuario (/vpn)")
         red.guarda()
     except ValueError as e:
         _p("NAOKO", str(e))
         return
-    _p("SYS", f"salida de Ritsuko: {red.estado()['salida'] or '(ninguna)'}. "
-              "No rota sola, y menos por cuota.")
+    _p("SYS", f"salida del sistema: {red.estado()['salida'] or '(ninguna)'}. "
+              "La usan el enjambre, la puerta de Edge y las descargas.")
 
 
 async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
@@ -181,8 +205,9 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
             "/imagen [--ar 16:9] [--seed N] [--quality q] [--backend b] PROMPT",
             "/video [--duration 10s] PROMPT  (solo Seedance 2.5+)",
             "/refs add|clear|list  URLs de diseño de referencia para vídeo",
-            "/proxy URL|off    enruta la ventana del Guest por TU proxy/VPN",
-            "/vpn URL|off|estado  la salida de red PROPIA de Ritsuko",
+            "/proxy URL|off    ajuste local de la ventana (manda /vpn)",
+            "/vpn URL|off|estado|estricto on|off|purgar   salida de red de",
+            "               TODO el sistema: enjambre, Edge y descargas",
             "/salir"]))
     elif cmd == "/vpn":
         _vpn(partes[1:])
@@ -459,6 +484,7 @@ def arranca() -> int:
 def _gui() -> int:
     """Ventana propia: servidor local + kernel en su hilo + pywebview."""
     import threading
+
     import webview
 
     loop = asyncio.new_event_loop()

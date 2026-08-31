@@ -1,0 +1,24 @@
+# Herramientas de desarrollo, FIJADAS a la version exacta.
+#
+# POR QUE FIJADAS, Y NO `pip install ruff` A SECAS
+# ================================================
+# El CI del 2026-08-31 se cayo con 28 errores de lint que en local no salian.
+# No porque el codigo fuese distinto: porque `pip install ruff` en el runner
+# instala la ULTIMA version, y cada version de ruff estrena reglas. Un linter
+# sin fijar no comprueba tu codigo: comprueba tu codigo contra las reglas de
+# hoy, que no son las de ayer ni las de manana.
+#
+# El efecto practico es el peor de los dos mundos: pasa en la maquina donde
+# lo escribes y rebota seis minutos despues, cuando ya no estas mirando. Un
+# guardian que avisa tarde entrena a ignorarlo.
+#
+# Subir la version es una decision deliberada: se cambia aqui, se corre en
+# local, se arreglan las reglas nuevas, y entonces entra. No al reves.
+ruff==0.16.5
+
+# La suite entera depende de estos tres. Sin `pytest-timeout` la marca
+# `timeout` se declara pero no se aplica —paso— y un cuelgue deja de fallar
+# para pasar a bloquear, que es peor porque no da diagnostico.
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-timeout==2.3.1

@@ -2,16 +2,16 @@
 
 POR QUE UN MODULO APARTE Y NO SEIS LINEAS EN builtin.py
 =======================================================
-El README de VeniceMAGI promete, literalmente: «IDE real: `read_file`,
+El README de VeniceMAGI promete, literalmente: Â«IDE real: `read_file`,
 `list_dir`, `patch_file` quirurgico, `delete_file` a papelera con journal,
 `hardware_info` (CPU/RAM/GPU/disco), `run_python` con plazo y `shell` solo
-con tu aprobacion clic a clic».
+con tu aprobacion clic a clicÂ».
 
-El nucleo portado trae equivalentes con otros nombres —`edit_file`,
-`delete_path`, `python_exec`, `run_command`— y no traia `hardware_info` en
+El nucleo portado trae equivalentes con otros nombres â€”`edit_file`,
+`delete_path`, `python_exec`, `run_command`â€” y no traia `hardware_info` en
 absoluto. Un README que promete un nombre que no existe es una promesa
 incumplida aunque la capacidad este: quien lea la documentacion y escriba
-`patch_file` recibe «herramienta desconocida», y con razon concluye que el
+`patch_file` recibe Â«herramienta desconocidaÂ», y con razon concluye que el
 documento miente.
 
 Aqui se cierran las dos mitades:
@@ -25,7 +25,7 @@ QUE NO CAMBIA
 =============
 Los permisos. Un alias hereda `access` y `dangerous` del original: llamar
 `shell` en vez de `run_command` no salta la aprobacion clic a clic, y
-`delete_file` deja la misma entrada en el journal que `delete_path` — la
+`delete_file` deja la misma entrada en el journal que `delete_path` â€” la
 papelera y el `undo` son los del nucleo, no una copia.
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ from .registry import Tool, ToolResult
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ALIAS", "instala_alias", "hardware_info", "registra"]
+__all__ = ["ALIAS", "hardware_info", "registra"]
 
 #: nombre prometido en el README -> herramienta que ya existe
 ALIAS: dict[str, str] = {
@@ -53,13 +53,13 @@ ALIAS: dict[str, str] = {
 }
 
 
-def instala_alias(reg) -> list[str]:
+def _instala_alias(reg) -> list[str]:
     """Registra los nombres del README apuntando a lo que ya hay.
 
     Devuelve los alias instalados. Un alias cuyo original no existe se
     SALTA con un aviso en vez de reventar: el registro de herramientas se
     construye al arrancar, y un nombre que cambie en el nucleo no puede
-    dejar el sistema sin arrancar — deja el sistema sin ese alias, que es
+    dejar el sistema sin arrancar â€” deja el sistema sin ese alias, que es
     un fallo mucho mas pequeno y visible en el log.
     """
     puestos = []
@@ -84,7 +84,7 @@ def instala_alias(reg) -> list[str]:
 def _gpus() -> list[str]:
     """Las GPU que se puedan enumerar. Lista vacia = no se pudo, y se dice.
 
-    No se inventa un «GPU: desconocida»: una respuesta vaga sobre el
+    No se inventa un Â«GPU: desconocidaÂ»: una respuesta vaga sobre el
     hardware es peor que ninguna, porque el enjambre la usa para decidir
     si un trabajo cabe en la maquina.
     """
@@ -96,8 +96,8 @@ def _gpus() -> list[str]:
                 r = subprocess.run(
                     [exe, "path", "win32_VideoController", "get", "name"],
                     capture_output=True, text=True, timeout=12)
-                salida = [l.strip() for l in r.stdout.splitlines()[1:]
-                          if l.strip()]
+                salida = [linea.strip() for linea in r.stdout.splitlines()[1:]
+                          if linea.strip()]
             except Exception:                            # noqa: BLE001
                 pass
         if not salida and shutil.which("powershell"):
@@ -106,15 +106,15 @@ def _gpus() -> list[str]:
                     ["powershell", "-NoProfile", "-Command",
                      "(Get-CimInstance Win32_VideoController).Name"],
                     capture_output=True, text=True, timeout=15)
-                salida = [l.strip() for l in r.stdout.splitlines() if l.strip()]
+                salida = [linea.strip() for linea in r.stdout.splitlines() if linea.strip()]
             except Exception:                            # noqa: BLE001
                 pass
     elif sys.platform.startswith("linux") and shutil.which("lspci"):
         try:
             r = subprocess.run(["lspci"], capture_output=True, text=True,
                                timeout=12)
-            salida = [l.split(": ", 1)[-1] for l in r.stdout.splitlines()
-                      if "VGA" in l or "3D controller" in l]
+            salida = [linea.split(": ", 1)[-1] for linea in r.stdout.splitlines()
+                      if "VGA" in linea or "3D controller" in linea]
         except Exception:                                # noqa: BLE001
             pass
     if not salida and shutil.which("nvidia-smi"):
@@ -122,7 +122,7 @@ def _gpus() -> list[str]:
             r = subprocess.run(
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True, text=True, timeout=12)
-            salida = [l.strip() for l in r.stdout.splitlines() if l.strip()]
+            salida = [linea.strip() for linea in r.stdout.splitlines() if linea.strip()]
         except Exception:                                # noqa: BLE001
             pass
     return salida
@@ -146,8 +146,8 @@ def hardware_info() -> dict:
     """CPU, RAM, GPU y disco de ESTA maquina. Sin adivinar nada.
 
     Cada campo que no se puede medir sale como `None` o lista vacia y se
-    resume en `no_verificado`. Es la quinta regla del proyecto: «no he
-    podido comprobarlo» no es «esta bien», y aqui tampoco es «8 GB».
+    resume en `no_verificado`. Es la quinta regla del proyecto: Â«no he
+    podido comprobarloÂ» no es Â«esta bienÂ», y aqui tampoco es Â«8 GBÂ».
     """
     no_verificado: list[str] = []
 
@@ -212,9 +212,9 @@ def registra(reg) -> list[str]:
         for d in datos["discos"]:
             lineas.append(f"Disco {d['punto']}: {d['libre_gb']} GB libres "
                           f"de {d['total_gb']} GB")
-        lineas.append(f"SO: {datos['so']} · Python {datos['python']}")
+        lineas.append(f"SO: {datos['so']} Â· Python {datos['python']}")
         for x in datos["no_verificado"]:
             lineas.append(f"[no verificado] {x}")
         return ToolResult(True, "\n".join(lineas), meta=datos)
 
-    return ["hardware_info", *instala_alias(reg)]
+    return ["hardware_info", *_instala_alias(reg)]

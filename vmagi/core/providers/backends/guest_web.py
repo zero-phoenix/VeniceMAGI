@@ -55,6 +55,16 @@ __all__ = ["GuestWebProvider", "proveedores_guest"]
 # lo hace en una línea.
 
 
+def _puerta_apagada() -> str:
+    """Motivo por el que la puerta no puede abrirse, o cadena vacia.
+
+    Se importa aqui dentro y no arriba a proposito: `test_arranque_ligero`
+    prohibe que importar el registro de proveedores arrastre playwright.
+    """
+    from vmagi.venice.puerta import puerta_deshabilitada
+    return puerta_deshabilitada()
+
+
 def _parte_mensajes(req: CompletionRequest) -> tuple[str, str]:
     """Aplana la conversacion en (sistema, usuario).
 
@@ -92,7 +102,7 @@ class GuestWebProvider(BaseProvider):
     # ------------------------------------------------------ disponibilidad
 
     async def available(self) -> bool:
-        """Hay Edge en disco. NO lanza el navegador para averiguarlo.
+        """Hay Edge en disco y la puerta esta permitida. NO lanza nada.
 
         Comprobarlo abriendo una ventana costaba segundos y parpadeaba en
         pantalla, y cualquier timeout se leia como «no hay Edge». Que la
@@ -107,6 +117,29 @@ class GuestWebProvider(BaseProvider):
     # -------------------------------------------------------- inferencia
 
     async def complete(self, req: CompletionRequest) -> CompletionResponse:
+        # UNA SONDA NO ABRE UN NAVEGADOR. NUNCA.
+        #
+        # El trabajo de una sonda es medir salud barato. Abrir un Edge real,
+        # esperar a que cargue venice.ai y escribir un prompt cuesta decenas
+        # de segundos y una llamada de la racion diaria — para averiguar algo
+        # que `available()` ya responde mirando el disco.
+        #
+        # No es teorico: el CI del 2026-08-31 se colgo 124 s y murio con un
+        # `Timeout` sin diagnostico porque una cadena de llamadas acabo aqui
+        # con `probe=True` en un runner sin escritorio. Y el coste no seria
+        # solo tiempo: cada sonda gastaria cupo del usuario para no aprender
+        # nada, que es la regla de oro de la telemetria rota — el instrumento
+        # de medida estropeando lo medido.
+        if req.probe:
+            raise ProviderUnavailable(
+                f"{self.id}: los sitios guest no se sondean. Abrir el "
+                "navegador para medir salud cuesta segundos y gasta racion "
+                "del dia; `available()` ya dice si la puerta puede abrirse.")
+
+        motivo = _puerta_apagada()
+        if motivo:
+            raise ProviderUnavailable(f"{self.id}: {motivo}")
+
         empezado = time.monotonic()
         sistema, usuario = _parte_mensajes(req)
         try:

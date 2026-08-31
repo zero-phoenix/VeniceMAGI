@@ -159,7 +159,13 @@ jobs:
         python-version: '3.11'
 
     - name: Install ruff
-      run: pip install ruff
+      # DEL FICHERO FIJADO, no `pip install ruff`.
+      #
+      # `pip install ruff` instala la ULTIMA version, y cada version estrena
+      # reglas. El CI del 31-ago se cayo con 28 errores de lint que en local
+      # no salian, por eso exactamente. Un linter sin fijar no comprueba tu
+      # codigo: lo comprueba contra las reglas de hoy, que no son las de ayer.
+      run: pip install -r requirements-dev.txt
 
     - name: Syntax and undefined names (bloqueante)
       run: ruff check vmagi/ tests/ --select E9,F63,F7,F82

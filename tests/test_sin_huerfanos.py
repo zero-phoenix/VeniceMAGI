@@ -84,7 +84,18 @@ SCRIPT = RAIZ / "scripts" / "huerfanos.py"
 #
 # A partir de aquí vuelve a la regla de siempre: solo baja, y en el mismo
 # commit que la bajada real.
-TECHO = 89
+#
+# 88 desde el 2026-08-31, y esto SÍ es la regla de siempre. La suite cazó 90
+# —dos por encima del techo— y la respuesta no fue subirlo:
+#   · `cache_consulta` y `cache_guarda` eran «compatibilidad con la v1» que no
+#     llamaba nadie. La v1 no sobrevive a este repositorio, así que la
+#     compatibilidad era con un pasado que no existe. Borradas.
+#   · `instala_alias` pasa a `_instala_alias`: la llama `registra()` en su
+#     propio módulo y no es API de nadie más.
+# El techo baja con el conteo. Si no bajara, el margen ganado se podría volver
+# a gastar sin que nadie se entere — que es la mitad del mecanismo que siempre
+# se olvida.
+TECHO = 88
 
 #: techos por paquete (2026-08-16, tras archivar 6 paquetes sin importadores:
 #: device, fabrication, vision, reasoning, os_portable, capabilities -> _attic). El total puede
@@ -97,8 +108,12 @@ TECHO = 89
 #: andamiaje crece, se sabrá en cuál de los dos, y no habrá que buscarlo.
 #: `vmagi/core` sube de 18 a 20 por el backend `guest_web` y los alias del
 #: manifiesto en `core/tools`.
-TECHOS_POR_PAQUETE = {"vmagi/modules": 63, "vmagi/core": 20,
-                      "vmagi/venice": 5, "vmagi/repl": 2}
+#: 2026-08-31: `core` baja de 20 a 17 y `venice` sube de 5 a 6 — el desglose
+#: enseñando exactamente para lo que existe: el total bajó, pero no bajó en
+#: todas partes. `venice` creció con `seedance_admitido`, que es la regla de
+#: versiones que sustituyó a dos comparaciones de cadenas.
+TECHOS_POR_PAQUETE = {"vmagi/modules": 63, "vmagi/core": 17,
+                      "vmagi/venice": 6, "vmagi/repl": 2}
 
 
 def _cuenta() -> int:

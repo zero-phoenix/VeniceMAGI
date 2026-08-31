@@ -12,9 +12,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .contenedor import CloudModelContainer
 from . import config
 from . import puerta as sesion
+from .contenedor import CloudModelContainer
 from .medios import ImagePipelineService, SeedanceVideoService
 from .privacidad import NotrackProvider
 from .racion import racion_de
@@ -83,15 +83,12 @@ def _lectura_segura(p, fn, intentos: int = 3):
     raise VeniceError(f"la página navegó y no se dejó leer: {ultimo}")
 
 
-#: Compatibilidad con la v1: la caché vive ahora en `racion.py`, una por
-#: sitio. Estas dos funciones siguen existiendo porque el REPL antiguo las
-#: importaba, pero delegan.
-def cache_consulta(clave: tuple, sitio: str = "venice") -> str | None:
-    return racion_de(sitio).consulta(clave)
-
-
-def cache_guarda(clave: tuple, valor: str, sitio: str = "venice") -> None:
-    racion_de(sitio).guarda(clave, valor)
+# Aquí vivían `cache_consulta` y `cache_guarda`, dos envoltorios «de
+# compatibilidad con la v1». No los llamaba nadie: la v1 no sobrevive a este
+# repositorio, así que la compatibilidad era con un pasado que no existe. Los
+# cazó el trinquete de huérfanos y se borraron en el mismo commit.
+#
+# La caché vive en `racion.py`, una por sitio, y se usa desde `Venice.chat`.
 
 
 class Venice:

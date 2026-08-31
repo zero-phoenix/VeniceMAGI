@@ -276,9 +276,9 @@ def loras() -> list[dict]:
 def prompt_hq(prompt: str) -> str:
     base = prompt.strip()
     extras = []
-    for l in loras():
-        nombre = str(l.get("name") or "").strip()
-        peso = l.get("weight", 1.0)
+    for lora in loras():
+        nombre = str(lora.get("name") or "").strip()
+        peso = lora.get("weight", 1.0)
         if nombre:
             extras.append(f"<lora:{nombre}:{peso}>")
     hdr = "photorealistic, ultra detailed, high quality, RAW, cinematic lighting"

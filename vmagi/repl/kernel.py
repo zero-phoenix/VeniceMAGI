@@ -10,12 +10,11 @@ import asyncio
 import itertools
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from ..venice import config
+from ..venice.cliente import Venice
 from .orchestrator import Orquestador
 from .store import Historial
-from ..venice.cliente import Venice
 
 
 @dataclass

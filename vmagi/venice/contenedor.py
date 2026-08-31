@@ -29,7 +29,7 @@ class CloudProvider:
     video: bool
 
     @classmethod
-    def desde_sitio(cls, s: SitioGuest) -> "CloudProvider":
+    def desde_sitio(cls, s: SitioGuest) -> CloudProvider:
         return cls(nombre=f"{s.nombre}-guest-free", chat=s.chat,
                    image=s.imagen, video=s.video)
 

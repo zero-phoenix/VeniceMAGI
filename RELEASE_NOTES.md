@@ -1,110 +1,111 @@
-# v2.0.0 — el enjambre completo sobre proveedores guest, y un taller que comprueba
+# v2.1.0 — el CI verde, una sola salida de red y el anonimato como código
 
-**Qué cambia:** VeniceMAGI pasa de un REPL de 3 000 líneas sobre un único
-proveedor a la arquitectura completa de MAGI — enjambre dialéctico con
-herramientas reales, GUI propia, supervisión y auditoría — **sin perder la
-promesa que le da nombre**: cloud-first, sin cuenta y sin clave en el camino
-principal.
+**Qué cambia:** la v2.0.0 no llegó a compilarse. Este release arregla las dos
+causas —una que colgaba el CI sin dejar diagnóstico y otra que ni siquiera
+llegaba a ejecutarse— y sustituye el principio de no-evasión por **anonimato
+absoluto**, implementado en las tres capas que salen a la red.
 
-## Lo concreto
+**Descarga:** en Assets, `VeniceMAGI-v2.1.0.zip`. Dentro hay **un solo fichero**,
+`VeniceMAGI.exe`: onefile, con su propio Python 3.10 dentro, sin instalador y
+sin dependencias que instalar.
 
-### Multi-familia guest, sin key ni login
+---
 
-- **Dos sitios guest operados por navegador**: `venice` (chat + imagen) y
-  `notrack` (chat). Ninguno pide cuenta. Se operan desde el Edge real de la
-  máquina, que es lo único que resuelve la atestación de cliente de Venice
-  (medido: Chromium headless → 403; Edge de la máquina → 200).
-- **Reparto del enjambre rehecho**: `MELCHIOR=venice`, `BALTHASAR=notrack`,
-  `CASPER=gemini`. Tres familias distintas, ninguna con clave. Melchior
-  construye con el único guest que además pinta; Balthasar refuta con un modelo
-  independiente —un refutador que comparte modelo con el proponente devuelve el
-  eco de su propia tesis—; Casper sintetiza por HTTP, sin navegador de por
-  medio, porque es quien te habla y su latencia se nota en cada respuesta.
-- **Un sitio nuevo es una fila, no un refactor**: `vmagi/venice/sitios.py`
-  declara URL, entrada de invitado, marcas de modal, marcas de cupo y
-  capacidades. La puerta es la misma para todos y no sabe de ninguno.
+## Lo que rompía el build, y ya no
 
-### El taller de arte: dos autores separados y un crítico estricto
+### 1. El CI se colgaba 124 s y moría con un `Timeout` sin diagnóstico
 
-`/imagen` ya no llama a un modelo:
+`test_rpc_handlers_arrancan.py` invoca **todos** los handlers RPC para
+comprobar que ninguno revienta al importar. Por una cadena de tres llamadas que
+nadie había mirado entera, uno de ellos acababa en `GuestWebProvider.complete()`
+con `probe=True` — y eso, en un runner de Windows sin escritorio, intentaba
+**abrir un Microsoft Edge real** y esperar a que cargase venice.ai.
 
-- El encargo se **trocea en promesas separables** antes de empezar. Los
-  criterios medibles (existe, abre, proporción, no está en blanco) los decide
-  una máquina, no un modelo.
-- **Venice y notrack redactan su lectura y su prompt en paralelo, sin verse.**
-  El paralelismo es la separación, no la velocidad: encadenarlos haría que el
-  segundo viera por dónde tiró el primero.
-- **Un crítico en una tercera familia** cuenta promesas cumplidas contra el
-  contrato. Ante la duda, INCUMPLE.
-- **La máquina manda sobre el modelo**: un criterio medible que salió falso
-  queda incumplido aunque el crítico lo apruebe.
-- **El reintento es dirigido**: la segunda pasada recibe la lista concreta de
-  promesas incumplidas, no un «hazlo mejor».
-- **Sin Pillow no se aprueba nada**: lo no medible sale como `no_verificable`,
-  nunca como cumplido.
+No fallaba: se quedaba quieto hasta que saltaba el plazo global de pytest. Un
+fallo que cuelga es peor que uno que revienta, porque no deja nada que leer.
 
-### Ritsuko, con salida de red propia
+Tres frenos, porque uno solo se olvida:
 
-- Entra la quinta IA completa: audita a Naoko, **solo informa**, y su familia no
-  se comparte con ninguna de las cinco auditadas — ahora `venice` y `notrack`
-  están en `FAMILIAS_AUDITADAS`, así que tampoco puede caer ahí.
-- **VPN/proxy propio** (`/vpn`, `RITSUKO_VPN`). Motivo: Venice y notrack
-  racionan por IP y por día; una auditora que sale por la misma IP se queda muda
-  justo cuando una tarea agota el cupo, que es cuando más falta hace.
-- **Y no rota para evadir.** `rota_por()` rechaza cualquier motivo que contenga
-  cuota, cupo, ración, 429, rate limit, límite, bloqueo, ban, captcha,
-  atestación o 403, y deja el intento apuntado. No hay parámetro que lo
-  desactive — un test lo comprueba inspeccionando la firma de la función.
+- **Una sonda no abre un navegador. Nunca.** `complete()` con `req.probe`
+  rechaza al instante. El trabajo de una sonda es medir salud barato; abrir un
+  navegador cuesta decenas de segundos y gasta ración del día para no aprender
+  nada que `available()` no responda ya mirando el disco.
+- **`VENICEMAGI_SIN_PUERTA=1`**, interruptor de proceso: `edge_disponible()`
+  dice que no y `abrir()` se niega, sin tocar el disco. Y si el cortafuegos de
+  navegador de §I.3 está instalado, la puerta tampoco es una excepción a esa
+  decisión.
+- **El guardián de entorno de los tests** cubre ahora `vmagi/venice/puerta.py`.
+  Ya existía para `sesion_web` —cinco veces un test pasó en local y falló en el
+  CI por preguntarle a la máquina— y la puerta se quedó fuera al portarla.
 
-### Fallos de la v1 que este release cierra
+### 2. Lint: 28 errores de ruff que ni dejaban llegar al build
 
-- **La caché LRU nunca se usó.** `venice.py` llamaba a `cache_guarda(clave, …)`
-  con `clave` sin definir en ningún sitio y jamás consultaba la caché: cada chat
-  correcto moría con `NameError` **después** de haber gastado la ración. La
-  «caché para que repetir no gaste cupo» que el README anunciaba no existía.
-- **Dos `data_dir()` distintos.** El REPL resolvía la ruta por su cuenta y el
-  núcleo por la suya. Coincidían por casualidad en Windows y divergían en el
-  resto: lo que grababa uno no lo leía el otro.
-- **Un solo perfil de Edge** para todos los sitios: las cookies de uno tumbaban
-  la sesión del otro, y la puerta reportaba «la sesión Guest caducó» sobre un
-  sitio que estaba perfectamente.
-- **Marcas de UI de Venice aplicadas a cualquier sitio**: seis constantes en un
-  `@staticmethod` que en notrack no recortaban nada, así que su pie de página se
-  colaba dentro de la respuesta.
-- **`prefer` construido como `f"g4f-{familia}"`**, una cadena que solo existe si
-  la familia la sirve g4f. Con los sitios guest —cuyo id es `venice-guest`— la
-  preferencia se perdía en silencio y el nodo acababa en la familia que el orden
-  general dejase arriba: exactamente el fallo de diversidad que el registro
-  existe para impedir. Ahora `prefer` casa por id **o** por familia.
-- **El contenedor virtual duplicaba las capacidades** y ya discrepaba del
-  cliente. Ahora las lee de `sitios.py`, que es la única fuente.
-- **Pedir imagen a un sitio que no pinta** fallaba a los 240 s con «la imagen no
-  apareció en el plazo» — la respuesta correcta a la pregunta equivocada. Ahora
-  se rechaza al instante, con el nombre del sitio y el motivo.
-- **`MOTIVOS_PROHIBIDOS` listaba «bloqueo»** y dejaba pasar «la IP quedó
-  bloqueada», que es como se escribe en un log de verdad. Ahora son raíces.
-- **`racion` como función exportada tapaba al módulo `venice.racion`**: a partir
-  de ese import, `racion.CACHE_MAX` moría con `AttributeError`. Ahora es
-  `racion_de`.
+`E741` (la variable `l`, que se confunde con `1` y con `I`), `I001` (orden de
+imports), `F401` (imports sin usar), `UP037` (anotaciones entrecomilladas) y
+`F841`. Todos en el código nuevo del port. Arreglados de raíz, no silenciados.
 
-### El README deja de prometer nombres que no existen
+---
 
-`patch_file`, `delete_file`, `run_python` y `shell` existen como alias reales de
-`edit_file`, `delete_path`, `python_exec` y `run_command` — **misma
-implementación y mismos permisos**: llamar `shell` no salta la aprobación clic a
-clic. Y `hardware_info` (CPU/RAM/GPU/disco) es código nuevo, porque esa
-capacidad no existía y el README la prometía. Lo que no se puede medir sale en
-`no_verificado`, nunca inventado.
+## Anonimato absoluto
+
+Sale el principio «sin evasión de cuotas» y entra **anonimato absoluto en todo
+sentido**, que no es una postura sino una lista de frenos concretos:
+
+- **Una sola salida de red, para todo.** Había **tres puertas** que no se
+  conocían entre sí: `/proxy` para la ventana de Edge, `NOTRACK_PROXY` para el
+  HTTP y `/vpn` para Ritsuko. Eso es **tráfico partido**: media aplicación por
+  la VPN y la otra media por tu línea, las dos rutas se correlacionan, y la VPN
+  deja de servir para lo único que sirve. Ahora `ritsuko_red` gobierna las tres
+  capas —HTTP, navegador y **variables de entorno de los subprocesos**, que se
+  olvidan siempre y son por donde se escapa `git`.
+- **Modo estricto** (`/vpn estricto on`): sin salida configurada, el sistema
+  **no sale**. La diferencia entre «uso VPN» y «uso VPN salvo cuando falle»,
+  que para el anonimato es la diferencia entre servir y no servir.
+- **`/vpn purgar`**: borra perfiles de navegador, caché y logs. El anonimato
+  hacia fuera no sirve si el sitio te reconoce por el perfil — un perfil
+  persistente guarda cookies entre sesiones aunque cambies de IP.
+- **Credenciales enmascaradas** en cualquier informe: `//usuario:***@host`.
+- **Errores útiles**: rechazar una salida mal escrita incluye ejemplos que
+  funcionan (Tor en `socks5://127.0.0.1:9050`, gratis y sin cuenta).
+
+---
+
+## Ritsuko: más ojos, no más manos
+
+Las funciones nuevas son **todas de lectura**. Sigue sin escribir código, sin
+cancelar tareas y sin tocar el reparto: un auditor con permiso para arreglar
+acaba revisándose a sí mismo a la segunda vez que arregla algo.
+
+- **`anonimato()`** — enumera las **fugas reales** con nombre y sitio: sin
+  salida configurada, modo estricto apagado, perfiles persistentes que te
+  identifican entre sesiones. Devuelve la lista, no un «ok»: un informe de
+  privacidad que solo sabe decir que sí es un informe que nadie ha mirado.
+- **`inventario_proveedores()`** — quién atiende hoy cada capacidad, con la
+  fecha de su última medida, y por qué la puerta no puede abrirse si no puede.
+- **`racion_del_dia()`** — cuánto cupo va gastado, por sitio.
+- **Gobierna la salida de red del sistema entero.** Es la única pieza cuyo
+  trabajo es mirar el conjunto, y la salida de red es una propiedad del
+  conjunto. Ponerla en el enjambre habría dado tres puertas otra vez.
+
+---
+
+## Vídeo: «Seedance 2.5+» pasa a significar eso
+
+La comprobación era `"seedance-2.5" not in model and "seedance-3" not in
+model`: dos cadenas literales para expresar una **comparación de versiones**.
+Rechazaba `seedance-2.6` y `seedance-4` —las versiones más nuevas, justo las
+que la regla quiere permitir— porque su texto no contiene ninguna de las dos.
+
+Ahora se extrae la versión y se compara. Una regla sobre versiones escrita con
+`in` no es una regla sobre versiones: es una lista de dos nombres que envejece
+sola.
+
+---
 
 ## Compatibilidad
 
-- **Rutas**: los datos viven en `%LOCALAPPDATA%\VeniceMAGI\`. Las variables de
-  entorno del núcleo pasan a `VENICEMAGI_ROOT`, `VENICEMAGI_DATA_DIR`,
-  `VENICEMAGI_WORKSPACE` y `VENICEMAGI_DESKTOP`. `VENICE_MAGI_DIR` sigue
-  funcionando como override del REPL.
-- **Paquete**: `magi` → `vmagi`. Cualquier script propio que importara `magi.*`
-  hay que reapuntarlo.
-- **Requisito nuevo**: Microsoft Edge instalado. Sin él, el camino guest no
-  arranca y el sistema **lo dice** en vez de fallar a medias.
-- `cache_consulta` y `cache_guarda` siguen existiendo por compatibilidad, ahora
-  delegando en `racion_de`.
+- **Sin cambios de interfaz.** `/proxy` y `/notrack` siguen existiendo;
+  `NOTRACK_PROXY` sigue valiendo como fuente de la salida única, así que una
+  configuración que ya funcionaba sigue funcionando.
+- **Nuevo**: `RITSUKO_VPN`, `RITSUKO_VPN_ESTRICTA`, `VENICEMAGI_SIN_PUERTA`.
+- **Requisito**: Microsoft Edge, para el camino guest.

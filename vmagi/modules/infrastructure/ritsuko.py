@@ -62,14 +62,14 @@ from vmagi.core.bus import BusEvent, MagiBus
 from vmagi.core.paths import data_dir
 from vmagi.core.providers.cloud import FreeCloudLLM
 from vmagi.modules.infrastructure.ritsuko_red import (
-    RotacionProhibida,
+    SalidaNoDisponible,
     salida_de_ritsuko,
 )
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["RitsukoAgent", "Informe", "FAMILIAS_AUDITADAS", "MODELOS_RITSUKO",
-           "RotacionProhibida"]
+           "SalidaNoDisponible"]
 
 #: Las familias que usa el resto del sistema. Ritsuko no puede usar ninguna:
 #: ver la cabecera. Se declara aquí y no se deduce en caliente porque un
@@ -162,26 +162,132 @@ class RitsukoAgent:
         self.metrics = metrics
         self.llm = FreeCloudLLM()
         self.activa = False
-        #: Su propia puerta de red: VPN o proxy del usuario. Ver
-        #: `ritsuko_red.py` — una auditora que sale por la misma IP que el
-        #: auditado comparte su ración y su bloqueo, y se queda muda el día
-        #: que hace falta. No rota sola, y menos por cuota.
+        #: La salida de red de TODO el sistema. Ver `ritsuko_red.py`: una
+        #: sola puerta para el enjambre, la ventana de Edge y las descargas.
+        #: Tres puertas distintas es tráfico partido, y basta una petición
+        #: por la línea directa para deshacer lo que hacen las demás.
         self.red = salida_de_ritsuko()
         #: Ventana de evidencia. Cada entrada: (t, tema, quién, texto).
         self._eventos: list[dict] = []
         self._informes: list[Informe] = []
         self._t0 = time.monotonic()
 
-    # -------------------------------------------------------- salida de red
+    # ------------------------------------------- la red de TODO el sistema
 
     def fijar_vpn(self, url: str | None) -> dict:
-        """Fija la VPN/proxy de Ritsuko. Solo desde el usuario (`/vpn`)."""
+        """Fija la salida de red del sistema. Solo desde el usuario (`/vpn`).
+
+        No es «la VPN de Ritsuko»: es la del programa entero. Ritsuko la
+        gobierna porque es la unica pieza cuyo trabajo es mirar el
+        conjunto, y la salida de red es una propiedad del conjunto.
+        """
         self.red.fija(url, origen="usuario (/vpn)")
+        self.red.guarda()
+        return self.red.estado()
+
+    def fijar_estricto(self, valor: bool) -> dict:
+        """Modo estricto: sin salida configurada, no se sale a la red.
+
+        Es la diferencia entre «uso VPN» y «uso VPN salvo cuando falle».
+        Para el anonimato, la segunda no sirve de nada: basta una peticion
+        por la linea directa para deshacer el trabajo de todas las demas.
+        """
+        self.red.fija_estricta(valor)
         self.red.guarda()
         return self.red.estado()
 
     def estado_red(self) -> dict:
         return self.red.estado()
+
+    def purgar_huella(self) -> dict:
+        """Borra perfiles de navegador, cache y logs locales.
+
+        El anonimato hacia fuera no sirve si el sitio guest te reconoce por
+        el perfil: un perfil persistente guarda cookies y almacenamiento
+        local entre sesiones, y eso es una huella estable aunque el trafico
+        salga por una VPN distinta cada vez.
+        """
+        borrado = self.red.purga()
+        logger.info("[ritsuko] huella purgada: %s", borrado)
+        return borrado
+
+    # ------------------------------------------------- mas ojos, no mas manos
+    #
+    # Las funciones nuevas de Ritsuko son todas de LECTURA. Sigue sin escribir
+    # codigo, sin cancelar tareas y sin tocar el reparto: un auditor con
+    # permiso para arreglar acaba revisandose a si mismo a la segunda vez que
+    # arregla algo. Lo que gana es alcance de mirada, no de mano.
+
+    def anonimato(self) -> dict:
+        """Auditoria del anonimato: que fuga hay, con nombre y sitio.
+
+        Devuelve la lista de fugas REALES, no un «ok». Un informe de
+        privacidad que solo sabe decir que si es un informe que nadie ha
+        mirado — y este sistema ya tuvo el problema con el observador de
+        imagenes que aprobaba capturas que nunca abrio.
+        """
+        from vmagi.venice import config as vconfig
+        from vmagi.venice.puerta import perfil_dir
+        from vmagi.venice.sitios import SITIOS
+
+        fugas: list[str] = []
+        e = self.red.estado()
+        if not e["configurada"]:
+            fugas.append(
+                "no hay salida de red: todo el trafico sale por tu linea y "
+                "tu IP real llega a cada proveedor")
+        if e["configurada"] and not e["estricta"]:
+            fugas.append(
+                "modo estricto apagado: si la salida cae, el sistema saldria "
+                "por la linea directa sin avisar")
+        try:
+            if vconfig.proxy():
+                fugas.append(
+                    "hay un `/proxy` propio de la ventana ademas de la salida "
+                    "del sistema: revisa que no sean rutas distintas")
+        except Exception:                                # noqa: BLE001
+            pass
+        persistentes = []
+        for s in SITIOS.values():
+            try:
+                p = perfil_dir(s)
+                if p.exists() and any(p.iterdir()):
+                    persistentes.append(s.nombre)
+            except Exception:                            # noqa: BLE001
+                pass
+        if persistentes:
+            fugas.append(
+                "perfiles de navegador con datos guardados (" +
+                ", ".join(persistentes) + "): el sitio puede reconocerte "
+                "entre sesiones aunque cambies de IP. `/vpn purgar` los borra")
+        return {
+            "salida": e,
+            "fugas": fugas,
+            "limpio": not fugas,
+            "perfiles_persistentes": persistentes,
+        }
+
+    def inventario_proveedores(self) -> dict:
+        """Quien atiende hoy cada capacidad, y quien no puede y por que."""
+        from vmagi.venice.puerta import puerta_deshabilitada
+        from vmagi.venice.sitios import SITIOS
+
+        return {
+            "puerta": puerta_deshabilitada() or "disponible",
+            "sitios": [
+                {"sitio": s.nombre, "familia": s.familia,
+                 "capacidades": list(s.capacidades()),
+                 "verificado": s.verificado, "nota": s.nota}
+                for s in SITIOS.values()
+            ],
+            "familias_auditadas": list(FAMILIAS_AUDITADAS),
+            "cadena_propia": list(FAMILIAS_RITSUKO),
+        }
+
+    def racion_del_dia(self) -> list[dict]:
+        """Cuanto cupo se ha gastado hoy, por sitio. Sin interpretar."""
+        from vmagi.venice.racion import estado_global
+        return estado_global()
 
     # ------------------------------------------------------------ arranque
 

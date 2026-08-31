@@ -92,7 +92,6 @@ class GuiServer:
                     return self._json({"eventos": k.eventos_desde(desde),
                                        "trabajando": k.trabajando})
                 if ruta == "/api/estado":
-                    v = k.v
                     return self._json({
                         "version": config.VERSION,
                         "hoy": k.hoy,

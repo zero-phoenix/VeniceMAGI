@@ -6,13 +6,12 @@ de otro modelo, es el STDOUT de haber ejecutado lo de Melchior.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass, field
 
+from ..venice.cliente import Venice
 from . import roles
 from .tools import Ejecutor, parsea_herramientas
-from ..venice.cliente import ChatResp, Venice
 
 
 @dataclass
@@ -113,9 +112,9 @@ class Orquestador:
         if not llamadas:
             return "(sin herramientas)"
         partes = []
-        for l in llamadas:
-            res = await self.ejecutor.ejecuta(l)
-            partes.append(f"· {l.herramienta}({', '.join(l.args)}) → "
+        for linea in llamadas:
+            res = await self.ejecutor.ejecuta(linea)
+            partes.append(f"· {linea.herramienta}({', '.join(linea.args)}) → "
                           f"{res.render()}")
             if res.ruta:
                 r.artefactos.append(str(res.ruta))

@@ -46,7 +46,6 @@ verificar en vez de aprobarlo por omision.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import math
 import re
@@ -113,7 +112,7 @@ class Encargo:
 
     @classmethod
     def desde_peticion(cls, peticion: str, *, aspect_ratio: str = "1:1",
-                       seed: int | None = None) -> "Encargo":
+                       seed: int | None = None) -> Encargo:
         """Extrae el contrato SIN llamar a ningun modelo.
 
         Se hace aqui y no preguntandole a una IA porque las promesas
@@ -343,11 +342,11 @@ class TallerDeArte:
     def _parte(texto: str) -> tuple[str, str]:
         lectura = prompt = ""
         for linea in (texto or "").splitlines():
-            l = linea.strip()
-            if l.upper().startswith("LECTURA:"):
-                lectura = l.split(":", 1)[1].strip()
-            elif l.upper().startswith("PROMPT:"):
-                prompt = l.split(":", 1)[1].strip()
+            linea = linea.strip()
+            if linea.upper().startswith("LECTURA:"):
+                lectura = linea.split(":", 1)[1].strip()
+            elif linea.upper().startswith("PROMPT:"):
+                prompt = linea.split(":", 1)[1].strip()
         return lectura, prompt
 
     # -------------------------------------------------------------- medir
@@ -454,9 +453,9 @@ class TallerDeArte:
         v = Veredicto(cumple=False, texto=texto or "", familia=familia)
         criterios = encargo.criterios
         for linea in (texto or "").splitlines():
-            l = linea.strip()
+            linea = linea.strip()
             mm = re.match(r"^(CUMPLE|INCUMPLE|NO_VERIFICABLE)\s+(\d+)\s*:?(.*)$",
-                          l, re.IGNORECASE)
+                          linea, re.IGNORECASE)
             if not mm:
                 continue
             marca, n, _resto = mm.group(1).upper(), int(mm.group(2)), mm.group(3)

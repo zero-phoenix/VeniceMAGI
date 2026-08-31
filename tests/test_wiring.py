@@ -220,7 +220,12 @@ def test_swarm_agents_can_reach_the_tools():
     Comprobación de contrato: los tres nodos declaran perfil de herramientas y
     tienen el método que las usa.
     """
-    from vmagi.modules.swarm.agents import BalthasarAgent, CasperAgent, MelchiorAgent, SwarmAgentBase
+    from vmagi.modules.swarm.agents import (
+        BalthasarAgent,
+        CasperAgent,
+        MelchiorAgent,
+        SwarmAgentBase,
+    )
 
     assert hasattr(SwarmAgentBase, "_ask_with_tools")
     roles = {MelchiorAgent.tool_role, BalthasarAgent.tool_role, CasperAgent.tool_role}

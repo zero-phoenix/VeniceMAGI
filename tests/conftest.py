@@ -255,6 +255,29 @@ def entorno_explicito(request, monkeypatch):
         yield
         return
 
+    # LA PUERTA DE EDGE ES LA MISMA FRONTERA, Y COSTÓ UN CI ENTERO.
+    #
+    # `vmagi/venice/puerta.py` abre un navegador REAL. Es exactamente la
+    # clase de función que este guardián existe para tapar, y se quedó
+    # fuera de la lista al portarla — con el resultado previsible: el CI
+    # del 2026-08-31 se colgó 124 s en un runner sin escritorio y murió
+    # con un `Timeout` que no decía de dónde venía.
+    #
+    # El interruptor `VENICEMAGI_SIN_PUERTA` es el freno de producción; este
+    # es el de los tests, y son los dos necesarios. El de producción evita
+    # que la puerta se abra; este además hace que un test que la invoque
+    # sin querer FALLE EN LOCAL diciendo qué escribir, en vez de pasar aquí
+    # y colgarse allí.
+    monkeypatch.setenv("VENICEMAGI_SIN_PUERTA", "1")
+    # Solo `edge_disponible`, que MIRA LA MÁQUINA (¿hay Edge instalado?).
+    # `perfil_dir` no se toca: crea un directorio bajo `data_dir`, que en
+    # tests ya está aislado en tmp_path. El guardián va en la frontera, no
+    # dentro — la misma distinción que costó un intento con `puede_abrir`.
+    puerta = sys.modules.get("vmagi.venice.puerta")
+    if puerta is not None:
+        monkeypatch.setattr(puerta, "edge_disponible",
+                            _se_niega("edge_disponible"), raising=False)
+
     modulo = sys.modules.get("vmagi.core.sesion_web")
     if modulo is not None:
         for nombre in _AMBIENTALES:
