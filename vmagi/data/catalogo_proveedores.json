@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "generado": "2026-08-30",
+  "nota": "Catalogo de proveedores de VeniceMAGI. Se puede sobreescribir con un fichero del mismo nombre en %LOCALAPPDATA%\\VeniceMAGI\\. REVISION DEL 2026-08-30 (port desde MAGI-System-IDE): entran dos familias guest operadas por navegador -venice y notrack- que son el camino principal del proyecto, y el reparto del enjambre se rehace alrededor de ellas. Las familias de g4f siguen enteras: sostienen la diversidad cuando un guest agota su racion del dia, que pasa, y cubren las capacidades que ningun guest declara. Ningun candidato de este fichero puede exigir cuenta, clave ni login: eso es lo que comprueba test_catalogo_sin_credenciales.",
+  "limites": {
+    "ventana_contexto_caracteres": 120000,
+    "nota": "Ninguno de estos proveedores gratuitos publica su ventana real, asi que poner un numero por modelo seria inventarselo. Este limite conservador global es lo que hoy NO existe: MAGI monta prompts largos sin comprobar nada, y cuando no caben lee el fallo como 'proveedor roto' y rota a otro que fallara igual. Subelo por familia cuando tengas la medida."
+  },
+  "hedge": {
+    "tras_segundos": 4.0,
+    "maximo": 3,
+    "nota": "3 en vez de 2: en el registro real del usuario, Yqcloud (familia gpt) tardaba entre 53 y 75 s por respuesta mientras el hedge solo lanzaba UN segundo candidato en paralelo. Con 3, un candidato rapido verificado (CopilotApp ~1,1 s, WeWordle ~2,4 s) puede cubrir la peticion mientras el lento sigue su curso. Sigue siendo gratuito y sin claves (§I.3); el coste es una llamada mas solo cuando el primero no responde en 'tras_segundos'."
+  },
+  "reparto_enjambre": {
+    "MELCHIOR": "venice",
+    "BALTHASAR": "notrack",
+    "CASPER": "gemini"
+  },
+  "reparto_enjambre_nota": "Reparto de VeniceMAGI, 2026-08-30. Tres familias distintas, ninguna con clave ni cuenta. MELCHIOR construye con venice porque es el camino principal del proyecto y el unico guest que ademas genera imagen, asi que quien propone es quien puede materializar. BALTHASAR refuta con notrack: modelo independiente y sin filtro de complacencia, que es lo que hace falta para que la antitesis muerda -un refutador que comparte modelo con el proponente devuelve el eco de su propia tesis. CASPER sintetiza en gemini, por HTTP y sin navegador de por medio: es quien te habla, y hacerle esperar a un Edge por cada sintesis se nota en cada respuesta. NAOKO rota entre command, gpt y claude; RITSUKO no puede usar ninguna de las cinco -ver vmagi/modules/infrastructure/ritsuko.py.",
+  "rotos": {
+    "Claude": "DESCARTADO: exige tu cuenta (browser_cookie3 + cookies). Los modelos Claude los sirve Perplexity sin cuenta.",
+    "OpenaiChat": "DESCARTADO: exige tu cuenta (.har de sesión). Los modelos GPT los sirve Perplexity.",
+    "Copilot": "DESCARTADO: exige tu cuenta (.har de sesión).",
+    "LMArena": "DESCARTADO: exige tu cuenta (fichero de autenticación) y nodriver.",
+    "Cloudflare": "DESCARTADO: su única vía es CDPSession (abrir Chrome). BrowserBlocked en 2 ms (13-ago).",
+    "DeepInfra": "DESCARTADO: SyncCDPSession + token Turnstile (captcha). BrowserBlocked en 3 ms (13-ago).",
+    "Pi": "DESCARTADO: abre navegador. BrowserBlocked en 5 ms (13-ago).",
+    "GLM": "DESCARTADO: responde captcha (_CaptchaRequired, medido 13-ago).",
+    "Groq": "DESCARTADO: HTTP 402 «No cake credits» (medido 13-ago).",
+    "Pollinations": "DESCARTADO: HTTP 402 Payment Required (medido 13-ago).",
+    "GeminiPro": "DESCARTADO: HTTP 429, cuota agotada. Los modelos Gemini los sirve `Gemini`.",
+    "MetaAI": "DESCARTADO: HTTP 403 «Fetch home failed» desde esta red (medido 13-ago).",
+    "PhindAi": "DESCARTADO: HTTP 403 Security (medido 13-ago). compat_curl arregló la firma de curl_cffi, no el acceso.",
+    "Qwen": "DESCARTADO: success=false del servidor (medido 13-ago). Mismo caso que PhindAi.",
+    "CopilotApp": "DESCARTADO: WSServerHandshakeError 460 al abrir el websocket (medido 13-ago).",
+    "Ollama": "DESCARTADO: es un motor LOCAL y §I.3 solo admite nube.",
+    "VeniceAPI": "DESCARTADO en el camino principal: la API de api.venice.ai exige clave. La web Guest no, y es la que se usa.",
+    "NoTrackPremium": "DESCARTADO: el plan de pago de notrack.ai exige cuenta. El chat libre no, y es el que se usa."
+  },
+  "familias": {
+    "command": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "CohereForAI_C4AI_Command",
+          "modelo": "command-a-03-2025",
+          "latencia_medida_ms": 3576,
+          "verificado": "2026-08-13"
+        },
+        {
+          "proveedor": "CohereForAI_C4AI_Command",
+          "modelo": "command-r-plus-08-2024"
+        },
+        {
+          "proveedor": "CohereForAI_C4AI_Command",
+          "modelo": "command-r-plus"
+        },
+        {
+          "proveedor": "HuggingSpace",
+          "modelo": null
+        }
+      ]
+    },
+    "claude": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude45sonnet",
+          "latencia_medida_ms": 3723,
+          "verificado": "2026-08-13"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude40opus",
+          "latencia_medida_ms": 2832,
+          "verificado": "2026-08-13"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude2"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude45sonnetthinking"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude37sonnetthinking"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "claude35haiku"
+        }
+      ],
+      "nota_orden": "Reescrita el 2026-08-13 tras MEDIRLA. Estaba marcada como rota porque sus dos candidatos (Claude, LMArena) exigen TU CUENTA, y la regla del proyecto es que aqui no se inicia sesion en ningun sitio. Lo que nadie habia mirado es que Perplexity -ya en el catalogo, working=True, needs_auth=False- sirve claude45sonnet y claude40opus. No hacia falta ninguna cookie: hacia falta leer la lista de modelos de los proveedores que YA funcionaban. Lo unico que lo impedia era un fallo de g4f de dos lineas (Perplexity.py lee conversation.thread_title sin asignarlo y pierde la respuesta ENTERA al final), que arregla providers/compat_g4f.py."
+    },
+    "gemini": {
+      "verificada": true,
+      "candidatos": [
+        {
+          "proveedor": "Gemini",
+          "modelo": "gemini-3.5-flash",
+          "latencia_medida_ms": 4879,
+          "verificado": "2026-08-13"
+        },
+        {
+          "proveedor": "Gemini",
+          "modelo": "gemini-3.1-pro"
+        },
+        {
+          "proveedor": "Gemini",
+          "modelo": "gemini-2.5-flash"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "gemini2flash"
+        }
+      ]
+    },
+    "gpt": {
+      "verificada": true,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "gpt5"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "gpt41"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "gpt4o"
+        },
+        {
+          "proveedor": "Yqcloud",
+          "modelo": "gpt-4",
+          "latencia_medida_ms": 9661,
+          "latencia_real_max_ms": 75000,
+          "verificado": "2026-08-13",
+          "aviso": "responde en chino; ademas 24 s y hasta 75 s en uso sostenido segun el registro del usuario"
+        },
+        {
+          "proveedor": "WeWordle",
+          "modelo": "gpt-4o"
+        }
+      ],
+      "nota_orden": "MEDIDA el 2026-08-13 y el resultado obliga a decir algo incomodo: de sus cinco candidatos solo responde Yqcloud, y responde EN CHINO (medido: 'di: funciona' -> '<caracteres chinos>...') en 9,7 s. CopilotApp da WSServerHandshakeError 460, WeWordle HTTP 429, Pollinations HTTP 402 y OpenaiChat exige un .har de sesion (prohibido por la regla de no iniciar sesion). Esto es la CAUSA RAIZ de que las respuestas del enjambre salieran en otro idioma: MELCHIOR usaba la familia gpt y su unico proveedor vivo es un servicio chino. Los reintentos por idioma de agents.py tratan el sintoma; esto es la enfermedad. Por eso MELCHIOR se mueve a `command` y gpt queda de reserva."
+    },
+    "razonamiento": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "o3"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "o4mini"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "pplx_reasoning"
+        }
+      ]
+    },
+    "grok": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "grok4"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "grok"
+        }
+      ]
+    },
+    "perplexity": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "auto",
+          "latencia_medida_ms": 5860,
+          "verificado": "2026-08-13"
+        },
+        {
+          "proveedor": "Perplexity",
+          "modelo": "turbo"
+        }
+      ]
+    },
+    "llama": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "llama_x_large"
+        }
+      ],
+      "nota_orden": "MEDIDA el 2026-08-13: Groq responde 402 ('No cake credits'). Estaba como verificada con 922 ms desde el 6 de agosto. Un proveedor gratuito verificado hace una semana no es un proveedor verificado."
+    },
+    "mistral": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "mistral"
+        }
+      ]
+    },
+    "deepseek": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "Perplexity",
+          "modelo": "r1"
+        }
+      ],
+      "nota_orden": "MEDIDA el 2026-08-13: PhindAi responde 403 (Security). El catalogo decia que compat_curl la habia revivido; 'ya no revienta por la firma de curl_cffi' no era 'responde', y asi estaba escrito. Ahora esta medido."
+    },
+    "hf": {
+      "verificada": true,
+      "candidatos": [
+        {
+          "proveedor": "HuggingSpace",
+          "modelo": null,
+          "latencia_medida_ms": 4656,
+          "verificado": "2026-08-13"
+        }
+      ]
+    },
+    "auto": {
+      "verificada": false,
+      "candidatos": [
+        {
+          "proveedor": "AnyProvider",
+          "modelo": "gpt-4o",
+          "latencia_medida_ms": 1671,
+          "verificado": "2026-08-06"
+        },
+        {
+          "proveedor": "AnyProvider",
+          "modelo": "default",
+          "latencia_medida_ms": 8014,
+          "verificado": "2026-08-06"
+        }
+      ],
+      "nota_orden": "MEDIDA el 2026-08-13: AnyProvider encadena a CopilotApp y OpenaiChat y falla con RetryProviderError. Solo vale cuando sus rutas viven."
+    }
+  },
+  "sitios_guest": {
+    "nota": "Los sitios que se operan por su pagina viva desde el Edge real del usuario. No estan en 'familias' porque no los sirve g4f: los construye vmagi/core/providers/backends/guest_web.py leyendo vmagi/venice/sitios.py. Aqui figuran para que /salud y el panel de proveedores los enseñen con el resto.",
+    "venice": {
+      "familia": "venice",
+      "url": "https://venice.ai/chat/classic",
+      "capacidades": [
+        "chat",
+        "imagen"
+      ],
+      "necesita_cuenta": false,
+      "necesita_clave": false,
+      "racion": "diaria, por IP, la fija Venice",
+      "verificado": "2026-08-16",
+      "nota": "La API oficial exige clave y el flujo anonimo legacy esta muerto. El Guest de la web funciona, pero SOLO desde un navegador real: Chromium headless recibe 403 por atestacion de cliente; el Edge de la maquina recibe 200. Por eso la puerta usa el Edge del usuario y no un navegador propio."
+    },
+    "notrack": {
+      "familia": "notrack",
+      "url": "https://notrack.ai/chat",
+      "capacidades": [
+        "chat"
+      ],
+      "necesita_cuenta": false,
+      "necesita_clave": false,
+      "racion": "no publicada; el sitio avisa cuando limita",
+      "verificado": "2026-08-30",
+      "nota": "Modelo propio e independiente, sin cuenta y sin perfil. Vale como segundo motor precisamente porque NO comparte modelo con Venice: un critico que corre el mismo modelo que el autor no critica, confirma. No genera imagen."
+    }
+  }
+}

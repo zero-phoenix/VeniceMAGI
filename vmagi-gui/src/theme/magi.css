@@ -1,0 +1,31 @@
+:root {
+  /* T12 - Premium Design System */
+  --vmagi-bg: #030508;
+  --vmagi-surface: #0a0e14;
+  --vmagi-surface-hover: #131a26;
+  --vmagi-node: #3b82f6;
+  --vmagi-node-dim: #1e3a8a;
+  --vmagi-accent: #f97316;
+  --vmagi-accent-hi: #fb923c;
+  --vmagi-ink: #000000;
+  --vmagi-text: #e2e8f0;
+  --vmagi-text-dim: #94a3b8;
+  --vmagi-ok: #10b981;
+  --vmagi-warn: #eab308;
+  --vmagi-danger: #ef4444;
+  --vmagi-undecided: #64748b;
+  --vmagi-grid: rgba(255, 255, 255, 0.05);
+  --vmagi-glow-accent: rgba(249, 115, 22, 0.5);
+  --vmagi-glow-node: rgba(59, 130, 246, 0.5);
+  
+  --font-prose: "Inter", "Outfit", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", "Fira Code", monospace;
+}
+
+body {
+  background-color: var(--vmagi-bg);
+  color: var(--vmagi-text);
+  font-family: var(--font-prose);
+  margin: 0;
+  padding: 0;
+}

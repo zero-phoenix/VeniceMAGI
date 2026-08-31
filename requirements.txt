@@ -1,0 +1,85 @@
+# VeniceMAGI — inferencia de nube gratuita, sin claves de API,
+# sin modelos locales (documento de arquitectura §I.3).
+g4f
+
+# curl_cffi: MEDIDO, no elegido. Estaba clavado en ==0.5.10 y eso habria
+# publicado un binario roto sin que nada avisara.
+#
+# El 2026-08-13 se compilo un entorno limpio desde requirements.lock —lo mismo
+# que hace el job que produce el .exe— y Perplexity, el proveedor que sirve
+# TODA la familia `claude`, fallaba asi:
+#
+#     RequestsError: impersonate chrome is not supported
+#
+# 0.5.10 solo admite alias con version ("chrome110"); el generico "chrome" que
+# usa g4f llego despues. Con >=0.16 la peticion vuelve a salir.
+#
+# Aqui funcionaba porque el entorno de desarrollo tiene 0.16.0 instalado: el
+# pin llevaba tiempo mintiendo y solo se vio al construir el entorno del
+# release de verdad. Un pin que nadie usa no protege, engana.
+#
+# Ademas `providers/compat_curl.py` existe precisamente porque las versiones
+# NUEVAS movieron `proxy` del constructor a `request`: el proyecto ya asumia
+# curl_cffi moderno en todas partes menos en este pin.
+curl_cffi>=0.16
+httpx
+requests==2.33.0
+websockets==12.0
+pydantic
+numpy==1.24.4
+scikit-learn==1.5.0
+pywebview==4.4.1
+pyinstaller==6.21.0
+
+# Ingeniería inversa y emuladores (§5.3). Ghidra y radare2 son opcionales:
+# se detectan si están instalados y el toolchain funciona sin ellos.
+capstone>=5.0
+unicorn>=2.0
+
+# Fábrica de artefactos con bucle de observación (§5). Opcionales: sin ellos
+# el sistema genera igual, pero no puede MIRAR lo que produjo.
+pygame
+pillow
+pypdf
+python-docx
+
+# Sesión web headless (vmagi/core/sesion_web.py). Firefox endurecido contra
+# fingerprinting, SIEMPRE sin ventana, para los proveedores que exigen una
+# sesión de navegador.
+#
+# SIN el extra `[gui]` A PROPÓSITO: ese arrastra PySide6, un toolkit de
+# ventanas entero. Meterlo sería instalar justo lo que la regla prohíbe —la
+# única ventana de MAGI es su interfaz— y de paso decenas de megas.
+#
+# El paquete son 1,3 MB: es solo el lanzador. El navegador (~100 MB) se baja
+# aparte con `camoufox fetch`, y no se baja solo: descargar cien megas sin
+# preguntar es la clase de sorpresa que ese módulo viene a evitar. Sin él,
+# `disponible()` lo dice y el resto del sistema funciona igual.
+camoufox
+
+# Tests (CI)
+#
+# `websockets` y `pyyaml` los usan los tests, no el sistema: test_rpc_transport
+# abre un servidor real y test_improvement comprueba los workflows de GitHub.
+# Faltaban en la lista de CI y habrían tumbado la compilación del release, que
+# depende de los tests — sin ellos no hay .exe.
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov
+pyyaml
+
+# pytest-timeout: la marca `@pytest.mark.timeout(300)` llevaba tiempo puesta en
+# los tests que compilan un .exe... y NO HACÍA NADA. Sin este paquete, pytest
+# registra la marca como desconocida y sigue. Medido: la suite completa pasó de
+# 533 s a quedarse colgada indefinidamente en `test_build_tetris_executable`,
+# sin que nada la matara, ni en local ni en el CI.
+#
+# Una marca que documenta una garantía que no existe es peor que no tenerla:
+# se confía en ella. Ahora el plazo se aplica de verdad y un test colgado
+# FALLA en vez de bloquear la suite entera.
+pytest-timeout
+
+# pytest-xdist: la suite en paralelo (-n auto) baja de ~5-7 min a ~2,5 min en
+# local y recorta el job de tests del CI. Es solo una dependencia de tests:
+# PyInstaller no la empaqueta porque nada del sistema la importa.
+pytest-xdist

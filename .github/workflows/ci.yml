@@ -1,0 +1,283 @@
+name: CI
+
+# Plan MAGI 9.0 §1.5 — tests en cada push, no solo al publicar.
+# v5.0.28 no tenía CI de tests: los test_area*.py vivían en scratch/ (que está
+# en .gitignore) y test_area0 estaba en rojo sin que nada lo detectara.
+#
+# ---------------------------------------------------------------------------
+# POR QUÉ ESTE FICHERO ES COMO ES: 46 MINUTOS POR PUSH
+# ---------------------------------------------------------------------------
+# El 2026-08-13 el CI se paró en seco. Los seis jobs fallaban en 2 segundos, sin
+# runner asignado y con cero pasos. La anotación de GitHub lo decía literal:
+#
+#   "The job was not started because recent account payments have failed or
+#    your spending limit needs to be increased."
+#
+# Este repositorio es PRIVADO, así que los minutos se pagan. Y medido sobre la
+# última corrida verde:
+#
+#   test (windows-latest, 3.11)   9,2 min x2 = 18,4 facturables
+#   test (windows-latest, 3.10)   7,0 min x2 = 14,0
+#   test (ubuntu-latest, 3.11)    6,9 min x1 =  6,9
+#   test (ubuntu-latest, 3.10)    6,1 min x1 =  6,1
+#   gui                           0,5 min    =  0,5
+#   lint                          0,4 min    =  0,4
+#   -----------------------------------------------
+#   TOTAL                                      46,3 min POR PUSH
+#
+# Con 2000 minutos al mes eso son 43 pushes. En una sola sesión de trabajo se
+# hacen seis. La cuota no se agotó por mala suerte: el CI estaba diseñado para
+# agotarla.
+#
+# DOS CAUSAS, LAS DOS EVITABLES
+# =============================
+# 1. Windows cuesta el DOBLE y había dos jobs de Windows. Se queda uno, en 3.10,
+#    que es la versión con la que se compila el .exe publicado. El segundo no
+#    aportaba información nueva: las diferencias entre 3.10 y 3.11 ya las cubre
+#    la matriz de Ubuntu, y la paridad de rutas se comprueba igual con un job.
+#
+# 2. Los tests marcados `slow` COMPILAN UN .EXE CON PYINSTALLER, y eso son dos
+#    tercios del tiempo (medido en local: 533 s la suite entera contra 187 s sin
+#    ellos). Se ejecutaban en los cuatro jobs, o sea cuatro veces por push, para
+#    comprobar algo que `release.yml` vuelve a comprobar antes de publicar.
+#
+#    NO se han eliminado: eso sería verde sin mirar, que es peor que rojo.
+#    Corren en el job `lentos` —semanal y bajo demanda— y en `release.yml`, que
+#    ya ejecuta `pytest tests/` completo y sin el cual no hay .exe.
+#
+# Estimado tras el recorte: ~12 min por push, unos 165 pushes al mes.
+
+on:
+  push:
+    branches: [main, "vmagi-*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Domingos a las 4:00 UTC: los tests lentos, una vez por semana. Un fallo
+    # en la compilación del .exe conviene saberlo antes de querer publicar,
+    # no el día que se publica.
+    - cron: "0 4 * * 0"
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    # Tres combinaciones, no cuatro, y no es por ahorrar sin más: Windows
+    # cuesta el doble de minutos y el segundo job de Windows no comprobaba
+    # nada que los otros tres no comprueben ya. Ver la cabecera del fichero.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.11"
+          # La paridad de rutas de Windows se comprueba aquí, en 3.10, que es
+          # la versión con la que se compila el .exe que se publica.
+          - os: windows-latest
+            python: "3.10"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+
+    # Se instala de requirements.txt y NO se enumeran paquetes aquí. La lista
+    # a mano se quedó atrás dos veces: primero sin `websockets` (lo importa
+    # test_rpc_transport arriba) y después sin `numpy`/`scikit-learn` (los
+    # importa vmagi/modules/skills/loader.py, que carga el kernel). En ambos
+    # casos la suite entera se caía en el runner y el release se quedaba sin
+    # .exe. test_wiring.py::test_los_workflows_instalan_desde_requirements
+    # impide volver a enumerar.
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Sin ffmpeg, los tests del bucle de observación de vídeo se SALTAN. Verde
+    # sin comprobar nada es peor que rojo: el fallo que cazan —vídeo en negro
+    # o congelado— es justo el que pasa todas las comprobaciones baratas.
+    - name: Install ffmpeg (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+    # En Windows faltaba, y ahí los tests de vídeo no se saltaban: FALLABAN,
+    # porque comprueban el mensaje de "no existe el punto de entrada" y lo que
+    # recibían era "ffmpeg no está instalado". Dos fallos permanentes en rojo
+    # que no eran del código. Instalarlo también aquí es lo coherente con la
+    # nota de arriba: verde sin comprobar nada es peor que rojo, así que se
+    # comprueba de verdad en las dos plataformas.
+    - name: Install ffmpeg (Windows)
+      if: runner.os == 'Windows'
+      run: choco install ffmpeg -y --no-progress
+
+    # `-m "not slow"`: los que compilan un .exe van al job `lentos` y a
+    # `release.yml`. Medido: 533 s la suite entera contra 187 s sin ellos, y
+    # aquí se pagaba cuatro veces por push. Ver la cabecera.
+    - name: Run tests
+      run: python -m pytest tests/ -v --tb=short -m "not slow"
+
+    # Cobertura de vmagi/core/ (informativa). continue-on-error: la cobertura
+    # está hoy en ~79%; cuando suba, se puede convertir en umbral bloqueante.
+    # Solo en Linux para no duplicar el reporte en la matriz de OS.
+    - name: Coverage report (vmagi/core)
+      if: runner.os == 'Linux'
+      continue-on-error: true
+      # `-m "not slow"` NO es un atajo para ir más rápido: es que este paso
+      # volvía a correr la suite ENTERA por segunda vez, incluidos los tests
+      # que compilan un .exe con PyInstaller de verdad (test_e2e_tetris_exe).
+      # Medido el 2026-08-13: el paso «Run tests» terminó en verde y el job
+      # siguió 35 minutos más aquí, con `continue-on-error: true` — o sea,
+      # media hora de runner por un número que ni siquiera puede tumbar la
+      # compilación.
+      #
+      # Y esos tests no aportan cobertura de `vmagi/core`: lo que ejercitan es
+      # PyInstaller. Se miden las 1000 pruebas rápidas, que es de donde sale
+      # el número que interesa.
+      run: python -m pytest tests/ -q -m "not slow" --cov=vmagi/core --cov-report=term --cov-config=/dev/null
+
+    - name: Check imports resolve
+      run: |
+        python -c "
+        import vmagi.core.paths, vmagi.core.context, vmagi.core.router
+        import vmagi.core.prompts, vmagi.core.agent_loop
+        import vmagi.core.providers.registry, vmagi.core.providers.cloud
+        import vmagi.core.tools
+        print('todos los módulos del núcleo importan')
+        "
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install ruff
+      run: pip install ruff
+
+    - name: Syntax and undefined names (bloqueante)
+      run: ruff check vmagi/ tests/ --select E9,F63,F7,F82
+
+    - name: Lint completo (bloqueante — deuda a cero el 2026-08-16)
+      # E501 está excluido en pyproject.toml (268 líneas, deuda de estilo).
+      # El resto SÍ bloquea: si esto falla, es un error real, no estilo.
+      run: ruff check vmagi/ tests/
+
+    - name: Audit de dependencias Python (bloqueante)
+      # pip-audit contra requirements.txt: 2026-08-16 encontró requests
+      # 2.31.0 (3 CVE) y scikit-learn 1.4.1 (1 CVE), ambos pineados a mano.
+      # Se subieron los pins. Si vuelve a fallar, hay un CVE nuevo y el pin
+      # correspondiente tiene que subir en el mismo commit.
+      run: |
+        pip install pip-audit
+        pip-audit -r requirements.txt --no-deps
+
+    - name: Audit de dependencias npm (bloqueante)
+      # La GUI Tauri también cuenta: dompurify <=3.4.12 (vía monaco-editor)
+      # se corrigió con un override a ^3.4.13 en vmagi-gui/package.json.
+      working-directory: ./vmagi-gui
+      run: npm audit --omit=dev
+
+    # pyright necesita poder IMPORTAR lo que el nucleo importa (pydantic,
+    # g4f, curl_cffi...). Sin esto, en local funcionaba (por el .venv-lock
+    # presente) y en el CI todo eran reportMissingImports: el mismo truco
+    # de siempre — el instrumento media distinto segun donde corre.
+    - name: Install project deps (para pyright)
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Type check nucleo (bloqueante — a cero el 2026-08-16)
+      # pyright lee pyrightconfig.json. vmagi/core esta limpio desde el
+      # 2026-08-16 (26 errores -> 0, y dos bugs reales en el camino: la sonda
+      # de latencia muerta por un import equivocado y t.nombre() llamando a
+      # una property). Lo que esta a cero se queda bloqueante.
+      run: |
+        pip install pyright
+        pyright vmagi/core
+
+    - name: Type check resto (informativo)
+      # vmagi/modules todavia tiene deuda de tipado. Misma idea que con ruff:
+      # visibilidad progresiva; cuando llegue a cero, pasa a bloqueante.
+      continue-on-error: true
+      run: pyright vmagi/
+
+    - name: No hardcoded machine paths
+      run: |
+        if grep -rnE "D:/PROYECTOS\|d:/PROYECTOS\|C:\\\\Users\\\\[A-Za-z]" --include="*.py" vmagi/ \
+           | grep -v "paths.py" | grep -v "naoko_repair.py" | grep -v "_attic"; then
+          echo "::error::Ruta absoluta a una máquina concreta. Usa vmagi.core.paths."
+          exit 1
+        fi
+        echo "sin rutas absolutas"
+
+    - name: Database must not be committed
+      run: |
+        if git ls-files | grep -q "venicemagi_brain.db"; then
+          echo "::error::venicemagi_brain.db versionado (contiene datos reales del usuario)"
+          exit 1
+        fi
+        echo "base de datos fuera del repositorio"
+
+  gui:
+    # Plan MAGI 9.0 §7 — la regla "sin tests verdes no hay release" valía solo
+    # para la mitad del sistema: 443 tests en Python y CERO en la interfaz.
+    # El diff de aprobación llevaba meses sin mostrar nada y nada lo detectó.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vmagi-gui
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: vmagi-gui/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Tests
+      run: npm test
+
+    - name: Type check and build
+      run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # LOS QUE COMPILAN UN .EXE
+  # ---------------------------------------------------------------------------
+  # Salen del CI de cada push porque cuestan dos tercios del tiempo y se pagaban
+  # cuatro veces. NO desaparecen: verde sin comprobar es peor que rojo, y el
+  # fallo que cazan —un .exe que no arranca— es justo el que pasa todas las
+  # comprobaciones baratas.
+  #
+  # Corren aquí (semanal y bajo demanda) y en `release.yml`, que ejecuta la
+  # suite ENTERA y sin cuyo verde no se publica nada.
+  #
+  # Solo Windows: los .exe se compilan en Windows y en Linux estos tests se
+  # saltan, así que un job de Ubuntu aquí sería verde sin comprobar nada.
+  lentos:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Install ffmpeg
+      run: choco install ffmpeg -y --no-progress
+    - name: Tests que compilan artefactos
+      run: python -m pytest tests/ -v --tb=short -m "slow"

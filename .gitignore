@@ -1,0 +1,72 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.env
+
+# Tauri / Rust
+vmagi-gui/src-tauri/target/
+vmagi-gui/src-tauri/Cargo.lock
+
+# Node
+vmagi-gui/node_modules/
+vmagi-gui/dist/
+vmagi-gui/.npm/
+
+# IDEs
+.vscode/
+.idea/
+
+# Temp
+scratch/
+*.log
+
+# PyInstaller
+dist/
+build/
+*.spec
+# Excepto el spec principal del producto, que debe versionarse.
+!VeniceMAGI.spec
+
+release/
+
+# Base de datos local (contiene datos reales del usuario)
+magi_brain.db
+*.db-wal
+*.db-shm
+
+# Journal de deshacer
+journal/
+
+# Scraps temporales: pegadas de logs de CI y outputs de pruebas locales.
+# Nunca deben entrar al repositorio.
+_build.txt
+_s.txt
+_suite.txt
+_t.txt
+_w.txt
+_w*.txt
+pytest_results*.txt
+
+# Cobertura de tests (generado por pytest-cov)
+.coverage
+htmlcov/
+
+# Medidas de proveedores: se regeneran con `python scripts/barrer_proveedores.py`
+# y dependen de la red y del día. Versionarlas sería congelar una foto que
+# caduca en horas — el catálogo ya guarda la conclusión con su fecha.
+barrido-proveedores.json
+suite.log
+suite.err
+barrido.log
+barrido.err
+
+# Artefactos que generan los proveedores al medirlos: PollinationsAudio
+# devuelve un .mp3 y PollinationsImage una imagen. Son basura de la sonda,
+# no del sistema.
+generated_media/
+
+# Entorno aislado para comprobar que el lock produce un binario que funciona
+# (scripts/verificar.py y publicar.py lo explican). Se regenera cuando haga falta.
+.venv-lock/
