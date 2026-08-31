@@ -521,6 +521,33 @@ def build_registry() -> ToolRegistry:
         logging.getLogger(__name__).warning(
             "[tools] fábrica de artefactos no disponible: %s", e)
 
+    # R16 — los oídos. R9 puso ojos a las corridas; el sonido es la otra
+    # mitad y el log no lo ve: un subsistema de audio gasta lo mismo con
+    # sonido limpio que con sonido a trompicones. El backend solo existe en
+    # Windows, así que el registro va en try como el resto: en Linux la
+    # herramienta no está y SE DICE, en vez de fingir un veredicto.
+    try:
+        from vmagi.modules.percepcion.tools import register_percepcion_tools
+        register_percepcion_tools(reg)
+    except Exception as e:            # pragma: no cover
+        import logging
+        logging.getLogger(__name__).warning(
+            "[tools] oídos y vista no disponibles: %s", e)
+
+    # Fase 6 — buscar en la memoria sin gastar red NI RACIÓN.
+    #
+    # En VeniceMAGI esto vale doble que en el MAGI del que viene: allí una
+    # consulta de más cuesta latencia; aquí cuesta una llamada del cupo
+    # diario que Venice raciona por IP. Un dato que ya está escrito en la
+    # bitácora y se le vuelve a preguntar a la nube es cupo tirado.
+    try:
+        from vmagi.modules.memory.tools import register_memory_tools
+        register_memory_tools(reg)
+    except Exception as e:            # pragma: no cover
+        import logging
+        logging.getLogger(__name__).warning(
+            "[tools] busqueda en memoria no disponible: %s", e)
+
     # Los nombres que el README de VeniceMAGI promete (`patch_file`,
     # `delete_file`, `run_python`, `shell`) más `hardware_info`, que no
     # existía. Va al FINAL a propósito: los alias necesitan que su original

@@ -1,111 +1,133 @@
-# v2.1.0 — el CI verde, una sola salida de red y el anonimato como código
+# v2.2.0 — subagentes, percepción, memoria local y un automodelo que se puede tumbar
 
-**Qué cambia:** la v2.0.0 no llegó a compilarse. Este release arregla las dos
-causas —una que colgaba el CI sin dejar diagnóstico y otra que ni siquiera
-llegaba a ejecutarse— y sustituye el principio de no-evasión por **anonimato
-absoluto**, implementado en las tres capas que salen a la red.
+**Qué cambia:** VeniceMAGI se sincroniza con el MAGI del que salió (estaba
+portado de v5.12.0, el upstream iba por v5.16.0) y estrena dos mecanismos
+propios: **subagentes por familia** y **mando de modelos en caliente**.
 
-**Descarga:** en Assets, `VeniceMAGI-v2.1.0.zip`. Dentro hay **un solo fichero**,
-`VeniceMAGI.exe`: onefile, con su propio Python 3.10 dentro, sin instalador y
-sin dependencias que instalar.
+**Descarga:** en Assets, `VeniceMAGI-v2.2.0.zip`. Dentro hay **un solo
+fichero**, `VeniceMAGI.exe`: onefile, con su propio Python 3.10 dentro.
 
 ---
 
-## Lo que rompía el build, y ya no
+## Subagentes por familia
 
-### 1. El CI se colgaba 124 s y moría con un `Timeout` sin diagnóstico
+Un nodo es un solo hilo de pensamiento. Cuando el encargo tiene tres partes
+separables, las aborda en fila y las últimas salen peor porque llegan con el
+contexto ya gastado. Y mientras tanto los ocho núcleos están parados: el
+enjambre espera respuestas de **red**, no de CPU. Medido en el proyecto de
+origen: tres esperas independientes tardan **1,50 s en serie y 0,51 s en
+abanico**.
 
-`test_rpc_handlers_arrancan.py` invoca **todos** los handlers RPC para
-comprobar que ninguno revienta al importar. Por una cadena de tres llamadas que
-nadie había mirado entera, uno de ellos acababa en `GuestWebProvider.complete()`
-con `probe=True` — y eso, en un runner de Windows sin escritorio, intentaba
-**abrir un Microsoft Edge real** y esperar a que cargase venice.ai.
+Ahora cada nodo abre un frente por parte, todos a la vez, y lo que vuelve entra
+como evidencia en su propia llamada.
 
-No fallaba: se quedaba quieto hasta que saltaba el plazo global de pytest. Un
-fallo que cuelga es peor que uno que revienta, porque no deja nada que leer.
+- **En su propia familia**, no repartidos entre varias. Repartirlos parecería
+  dar más diversidad y sería un error de los que no dan error: si los
+  subagentes de Melchior salieran por la familia de Balthasar, la tesis
+  llegaría contaminada con el sesgo de quien tiene que refutarla, y la
+  refutación encontraría menos porque parte de lo mismo.
+- **El troceo es determinista y no lo decide un modelo.** Cuesta una llamada de
+  la ración averiguar cómo gastar la ración — y con un troceo que cambia entre
+  corridas idénticas, la compuerta de la fase («tarda menos con la misma
+  calidad») deja de poder medirse.
+- **Nunca se pierde una promesa del encargo**: lo que pasa del máximo de cuatro
+  frentes se pega al último en vez de tirarse.
+- **Lo que no se cubrió, se dice.** Un texto fundido sin costuras esconde justo
+  el frente que falló.
+- **Un frente caído no se lleva a los demás**, que ya han gastado ración.
+- **Balthasar no abre subagentes**, a propósito: su turno ya es redundante por
+  diseño (varios ejes de refutación en paralelo), y abrirle un abanico encima
+  sería pagar dos veces la misma redundancia.
+- **Un abanico roto no tumba el turno.** Una optimización que puede dejarte sin
+  respuesta no es una optimización.
 
-Tres frenos, porque uno solo se olvida:
-
-- **Una sonda no abre un navegador. Nunca.** `complete()` con `req.probe`
-  rechaza al instante. El trabajo de una sonda es medir salud barato; abrir un
-  navegador cuesta decenas de segundos y gasta ración del día para no aprender
-  nada que `available()` no responda ya mirando el disco.
-- **`VENICEMAGI_SIN_PUERTA=1`**, interruptor de proceso: `edge_disponible()`
-  dice que no y `abrir()` se niega, sin tocar el disco. Y si el cortafuegos de
-  navegador de §I.3 está instalado, la puerta tampoco es una excepción a esa
-  decisión.
-- **El guardián de entorno de los tests** cubre ahora `vmagi/venice/puerta.py`.
-  Ya existía para `sesion_web` —cinco veces un test pasó en local y falló en el
-  CI por preguntarle a la máquina— y la puerta se quedó fuera al portarla.
-
-### 2. Lint: 28 errores de ruff que ni dejaban llegar al build
-
-`E741` (la variable `l`, que se confunde con `1` y con `I`), `I001` (orden de
-imports), `F401` (imports sin usar), `UP037` (anotaciones entrecomilladas) y
-`F841`. Todos en el código nuevo del port. Arreglados de raíz, no silenciados.
-
----
-
-## Anonimato absoluto
-
-Sale el principio «sin evasión de cuotas» y entra **anonimato absoluto en todo
-sentido**, que no es una postura sino una lista de frenos concretos:
-
-- **Una sola salida de red, para todo.** Había **tres puertas** que no se
-  conocían entre sí: `/proxy` para la ventana de Edge, `NOTRACK_PROXY` para el
-  HTTP y `/vpn` para Ritsuko. Eso es **tráfico partido**: media aplicación por
-  la VPN y la otra media por tu línea, las dos rutas se correlacionan, y la VPN
-  deja de servir para lo único que sirve. Ahora `ritsuko_red` gobierna las tres
-  capas —HTTP, navegador y **variables de entorno de los subprocesos**, que se
-  olvidan siempre y son por donde se escapa `git`.
-- **Modo estricto** (`/vpn estricto on`): sin salida configurada, el sistema
-  **no sale**. La diferencia entre «uso VPN» y «uso VPN salvo cuando falle»,
-  que para el anonimato es la diferencia entre servir y no servir.
-- **`/vpn purgar`**: borra perfiles de navegador, caché y logs. El anonimato
-  hacia fuera no sirve si el sitio te reconoce por el perfil — un perfil
-  persistente guarda cookies entre sesiones aunque cambies de IP.
-- **Credenciales enmascaradas** en cualquier informe: `//usuario:***@host`.
-- **Errores útiles**: rechazar una salida mal escrita incluye ejemplos que
-  funcionan (Tor en `socks5://127.0.0.1:9050`, gratis y sin cuenta).
+El abanico deja medido su ahorro (`ms_abanico` contra `ms_si_fuera_en_serie`).
+Esa es su compuerta: si no sale positivo de forma sostenida, se retira.
 
 ---
 
-## Ritsuko: más ojos, no más manos
+## `/modelos`: las opciones de modelo, ampliadas
 
-Las funciones nuevas son **todas de lectura**. Sigue sin escribir código, sin
-cancelar tareas y sin tocar el reparto: un auditor con permiso para arreglar
-acaba revisándose a sí mismo a la segunda vez que arregla algo.
+El reparto vivía en un JSON y solo sabía decir qué familia le tocaba a cada
+nodo. Cambiarlo exigía editar el fichero y reiniciar; y la lista de lo
+disponible estaba repartida entre `sitios.py`, el catálogo y las constantes de
+g4f, sin que nadie la juntara.
 
-- **`anonimato()`** — enumera las **fugas reales** con nombre y sitio: sin
-  salida configurada, modo estricto apagado, perfiles persistentes que te
-  identifican entre sesiones. Devuelve la lista, no un «ok»: un informe de
-  privacidad que solo sabe decir que sí es un informe que nadie ha mirado.
-- **`inventario_proveedores()`** — quién atiende hoy cada capacidad, con la
-  fecha de su última medida, y por qué la puerta no puede abrirse si no puede.
-- **`racion_del_dia()`** — cuánto cupo va gastado, por sitio.
-- **Gobierna la salida de red del sistema entero.** Es la única pieza cuyo
-  trabajo es mirar el conjunto, y la salida de red es una propiedad del
-  conjunto. Ponerla en el enjambre habría dado tres puertas otra vez.
+```
+/modelos                     inventario completo + reparto actual
+/modelos CASPER command      fija la familia de un nodo, en caliente
+/modelos CASPER auto         la suelta y vuelve a mandar el catálogo
+```
+
+- **Enumera las 13 familias** disponibles sin cuenta —2 guest operadas por
+  navegador y 11 de g4f— con su capacidad, sus candidatos vivos y la fecha de
+  su última medida.
+- **Se niega a poner dos nodos en la misma familia.** No se hacen eco: se dice
+  por qué. El sistema seguiría respondiendo, peor, sin dar un solo error — que
+  es exactamente la clase de fallo contra la que existe el registro.
+- **Naoko y Ritsuko no se tocan desde aquí**: Naoko rota a propósito según la
+  petición y Ritsuko tiene prohibidas las familias que audita. Ofrecer un mando
+  que rompe una garantía es peor que no ofrecerlo.
+- **Los agentes leen el reparto efectivo**, no el catálogo a secas. Leerlo a
+  secas reproduciría el fallo de v5.0.28 una capa más arriba: el usuario
+  cambiaría la familia, la interfaz diría que cambió, y los agentes seguirían
+  llamando a la de antes.
 
 ---
 
-## Vídeo: «Seedance 2.5+» pasa a significar eso
+## Sincronización con MAGI v5.16.0
 
-La comprobación era `"seedance-2.5" not in model and "seedance-3" not in
-model`: dos cadenas literales para expresar una **comparación de versiones**.
-Rechazaba `seedance-2.6` y `seedance-4` —las versiones más nuevas, justo las
-que la regla quiere permitir— porque su texto no contiene ninguna de las dos.
+VeniceMAGI se portó de v5.12.0. Entre medias el upstream construyó cuatro
+subsistemas que aquí faltaban, y que encajan directamente con lo que el
+proyecto ya promete:
 
-Ahora se extrae la versión y se compara. Una regla sobre versiones escrita con
-`in` no es una regla sobre versiones: es una lista de dos nombres que envejece
-sola.
+- **Percepción** — oídos (loopback WASAPI: ¿suena? ¿sale entero?) y vista (qué
+  hay en pantalla, en qué idioma, qué botón pide). Es la mitad que le faltaba
+  al taller de arte, que hoy declara «no verificable» todo lo visual.
+- **Índice local FTS5** — buscar en la bitácora, la memoria, los docs y el
+  código sin gastar red **ni ración**. En VeniceMAGI esto vale doble: una
+  consulta de más no cuesta latencia, cuesta una llamada del cupo diario que
+  Venice raciona por IP.
+- **Memoria persistente entre proyectos** — mandos por consola (16 consolas) y
+  descartes con campo `rescatable`. Un enfoque que pierde deja conocimiento
+  igual que uno que gana, y suele dejar más.
+- **Mapa de interfaz** — qué topics de la GUI están conectados al núcleo.
+
+---
+
+## Automodelo: lo que VeniceMAGI sabe que no sabe
+
+`docs/AUTOMODELO.json` llega **sembrado con lo de VeniceMAGI**, no con lo del
+proyecto de origen. Cada afirmación trae la prueba que la tumbaría y la
+evidencia de la última vez que la realidad dijo algo:
+
+- **Refutadas (5):** que una sonda pueda medir un sitio guest *(exige abrir
+  navegador: colgó el CI 124 s)*; que el crítico del taller pueda juzgar lo que
+  se ve; que el vídeo generativo funcione en modo cloud; que el prompt llegue
+  entero al proveedor *(se corta en 7000 caracteres sin avisar)*.
+- **Sin comprobar (4):** que el chat guest de Venice responda; que el de
+  notrack.ai responda; que el taller entregue de extremo a extremo; que la
+  percepción funcione contra un artefacto real.
+
+«Sin comprobar» **no es** «no funciona»: es que nadie lo ha puesto a prueba, y
+decirlo es más útil que inventar un veredicto.
+
+---
+
+## Trinquetes: bajan, no suben
+
+El conteo de huérfanos llegó a 89 con un techo de 88. La respuesta no fue subir
+el techo: `familias_validas` pasa a `_familias_validas` porque la usa
+`fijar_familia` y nadie más. 88, y `vmagi/venice` vuelve a su techo de 6.
+
+Y un BOM más: escribir con PowerShell dejó un fichero con marca de orden de
+bytes y `test_wiring` murió con un `SyntaxError` sin línea. Se escribe con
+Python, `newline='\n'`.
 
 ---
 
 ## Compatibilidad
 
-- **Sin cambios de interfaz.** `/proxy` y `/notrack` siguen existiendo;
-  `NOTRACK_PROXY` sigue valiendo como fuente de la salida única, así que una
-  configuración que ya funcionaba sigue funcionando.
-- **Nuevo**: `RITSUKO_VPN`, `RITSUKO_VPN_ESTRICTA`, `VENICEMAGI_SIN_PUERTA`.
-- **Requisito**: Microsoft Edge, para el camino guest.
+- **Sin cambios de interfaz.** Todos los comandos anteriores siguen igual.
+- **Nuevo**: `/modelos`, y `familias_por_nodo` en `config.json`.
+- **1719 tests en verde**, ruff limpio con la versión fijada.

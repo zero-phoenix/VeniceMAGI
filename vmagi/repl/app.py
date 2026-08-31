@@ -129,6 +129,34 @@ async def main() -> int:
     return 0
 
 
+def _modelos(args: list[str]) -> None:
+    """`/modelos` — qué modelos hay sin cuenta, y quién usa cuál.
+
+    Sin argumentos imprime el inventario. Con `NODO FAMILIA` fija la familia
+    de ese nodo en caliente; con `NODO auto` la suelta y vuelve a mandar el
+    catálogo.
+    """
+    from ..venice.modelos import FamiliaRepetida, fijar_familia, informe
+
+    if not args:
+        _p("SYS", informe())
+        return
+    if len(args) < 2:
+        _p("NAOKO", "uso: /modelos NODO FAMILIA  ·  /modelos NODO auto")
+        return
+    nodo, familia = args[0], args[1]
+    try:
+        reparto = fijar_familia(nodo, None if familia.lower() in
+                                ("auto", "off", "-") else familia)
+    except FamiliaRepetida as e:
+        _p("NAOKO", str(e))
+        return
+    except ValueError as e:
+        _p("NAOKO", str(e))
+        return
+    _p("SYS", "reparto: " + " · ".join(f"{n}={f}" for n, f in reparto.items()))
+
+
 def _vpn(args: list[str]) -> None:
     """`/vpn` — la salida de red de TODO el sistema.
 
@@ -208,9 +236,12 @@ async def _comando(linea: str, v: Venice, hist: Historial) -> bool:
             "/proxy URL|off    ajuste local de la ventana (manda /vpn)",
             "/vpn URL|off|estado|estricto on|off|purgar   salida de red de",
             "               TODO el sistema: enjambre, Edge y descargas",
+            "/modelos [NODO FAMILIA|NODO auto]  qué hay y quién usa qué",
             "/salir"]))
     elif cmd == "/vpn":
         _vpn(partes[1:])
+    elif cmd == "/modelos":
+        _modelos(partes[1:])
     elif cmd == "/sesion":
         await v.cerrar()
         try:

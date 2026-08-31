@@ -69,6 +69,9 @@ class SwarmAgentBase:
         self.blackboard = blackboard
         self.bus = bus
         self.llm = FreeCloudLLM()
+        #: Lo que midió el último abanico de subagentes, o None. Alimenta la
+        #: compuerta de la fase (ver `subagentes.resumen`).
+        self.ultimo_abanico: dict | None = None
         #: Motivo por el que el último turno con herramientas salió degradado,
         #: o None. Lo lee el árbitro para no firmar sobre un error (C11).
         self._ultima_degradacion: str | None = None
@@ -154,6 +157,17 @@ class SwarmAgentBase:
         return {"rama": self.rama, "rama_rol": self.rama_rol,
                 "profundidad": self.rama_profundidad}
 
+    #: ¿Este nodo abre subagentes? El porqué de cada respuesta, en
+    #: `subagentes.py`.
+    subagentes: bool = True
+
+    async def _abanico(self, sistema: str, encargo: str) -> str:
+        """Delega en `subagentes.abanico_para`. La lógica vive allí."""
+        from .subagentes import abanico_para
+        encargo, self.ultimo_abanico = await abanico_para(
+            self, sistema, encargo)
+        return encargo
+
     async def _ask(self, sys_prompt: str, user_prompt: str, *,
                    engine: str = "fast", narrative_style: str = "tecnico",
                    temperature: float = 0.4) -> tuple[str, str, str]:
@@ -182,6 +196,11 @@ class SwarmAgentBase:
             get_context().render(),
         ])
         temp = temperature if engine == "fast" else max(0.1, temperature - 0.2)
+
+        # SUBAGENTES (fase 2): si el encargo tiene partes separables, este
+        # nodo abre un frente por parte, en su familia y a la vez. Ver
+        # `subagentes.py` — cuándo se abre, por qué en su familia, y qué mide.
+        user_prompt = await self._abanico(full_sys, user_prompt)
 
         # GUARDA DE IDIOMA. La instrucción del prompt no basta con los
         # proveedores gratuitos: CASPER llegó a entregar su aprobación en
@@ -735,9 +754,21 @@ def _familia_por_defecto(rol: str) -> str:
 
     Derivarlo elimina la clase de fallo entera: no puede haber dos verdades
     sobre qué familia usa cada nodo si solo hay una escrita.
+
+    Y esa única verdad es `reparto_efectivo()`: el catálogo MÁS lo que el
+    usuario fijó con `/modelos`. Leer aquí el catálogo a secas reproduciría
+    el mismo fallo una capa más arriba.
     """
-    from vmagi.core.providers.backends.g4f_backend import DEFAULT_SWARM_FAMILIES
-    return DEFAULT_SWARM_FAMILIES.get(rol.upper(), "auto")
+    try:
+        from vmagi.venice.modelos import familia_de
+        return familia_de(rol)
+    except Exception:                                    # noqa: BLE001
+        # Si la capa de mando no carga, manda el catálogo. Un mando roto no
+        # puede dejar al enjambre sin familia.
+        from vmagi.core.providers.backends.g4f_backend import (
+            DEFAULT_SWARM_FAMILIES,
+        )
+        return DEFAULT_SWARM_FAMILIES.get(rol.upper(), "auto")
 
 
 class MelchiorAgent(SwarmAgentBase):
@@ -844,6 +875,10 @@ class BalthasarAgent(SwarmAgentBase):
     role_name = "BALTHASAR"
     tool_role = "BALTHASAR"
     seed = 22
+
+    #: Sin subagentes: su turno ya es redundante por diseño (varios ejes en
+    #: paralelo). Mismo razonamiento que su `hedge=False`.
+    subagentes = False
 
     def __init__(self, blackboard: Blackboard, bus: MagiBus):
         super().__init__(blackboard, bus)

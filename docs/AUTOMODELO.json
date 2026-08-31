@@ -1,0 +1,101 @@
+[
+ {
+  "texto": "Se compilar un unico VeniceMAGI.exe onefile y publicarlo en Release",
+  "prueba": "build_release",
+  "estado": "sostenida",
+  "ultima": "2026-08-31 10:33",
+  "evidencia": "v2.1.0: Actions en verde, zip de 143,8 MB con un solo fichero dentro, SHA256 descargado coincide con CHECKSUMS.txt",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Se pasar la suite entera y ruff sin errores antes de publicar",
+  "prueba": "compuerta_completa",
+  "estado": "sostenida",
+  "ultima": "2026-08-31 10:20",
+  "evidencia": "1572 tests EXIT=0 y ruff 0.16.5 limpio, en la corrida que precedio al tag v2.1.0. Se cayo una vez: la v2.0.0 se publico sin pasar la compuerta y el CI reboto.",
+  "veces_ok": 1,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El chat guest de Venice responde a traves de la puerta de Edge",
+  "prueba": "chat_venice_guest",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "Nadie lo ha ejecutado contra venice.ai desde el port. La medida del 16-ago (403 con Chromium headless, 200 con el Edge real) es del codigo v1, no de este.",
+  "veces_ok": 0,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El chat guest de notrack.ai responde a traves de la puerta de Edge",
+  "prueba": "chat_notrack_guest",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "Los selectores de notrack.ai en sitios.py se escribieron leyendo la web, no operandola. marcas_modal y marcas_cupo no se han visto disparar ni una vez.",
+  "veces_ok": 0,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El taller de arte entrega una imagen que cumple el contrato del encargo",
+  "prueba": "taller_arte_extremo_a_extremo",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "Los tests cubren el contrato, el critico y el reintento con dobles. La cadena entera contra Venice de verdad no se ha corrido.",
+  "veces_ok": 0,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El critico del taller puede juzgar lo que se ve en la imagen",
+  "prueba": "critico_con_vision",
+  "estado": "refutada",
+  "ultima": "2026-08-30 22:00",
+  "evidencia": "Ningun proveedor guest acepta imagenes de entrada. Las promesas visuales salen como NO_VERIFICABLE, que es la respuesta correcta y no la deseable.",
+  "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "Una sonda mide la salud de un sitio guest",
+  "prueba": "sonda_guest",
+  "estado": "refutada",
+  "ultima": "2026-08-31 00:35",
+  "evidencia": "Sondear un sitio guest exige abrir un navegador: colgo el CI 124 s hasta morir con Timeout. Ahora complete() rechaza probe=True y la salud se deduce de available(), que solo mira el disco.",
+  "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El video generativo funciona en modo cloud",
+  "prueba": "video_guest",
+  "estado": "refutada",
+  "ultima": "2026-08-30 22:00",
+  "evidencia": "Ningun proveedor guest declara video. Seedance 2.5+ exige VENICE_API_KEY, que esta fuera del camino principal por diseno.",
+  "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El prompt llega entero al proveedor guest",
+  "prueba": "prompt_sin_decapitar",
+  "estado": "refutada",
+  "ultima": "2026-08-31 11:00",
+  "evidencia": "cliente.py corta en 7000 caracteres sin avisar. Lo que viaje al final -la evidencia de Balthasar- se pierde y el nodo contesta sobre medio encargo creyendo que lo tiene entero.",
+  "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "La salida de red del sistema es una sola para todas las capas",
+  "prueba": "anonimato_sin_trafico_partido",
+  "estado": "sostenida",
+  "ultima": "2026-08-31 10:20",
+  "evidencia": "test_ritsuko_vpn comprueba que httpx, el lanzamiento de Playwright y las variables de entorno de subprocesos reciben la MISMA salida",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Se oye si un artefacto suena, y se clasifica lo que hay en pantalla",
+  "prueba": "percepcion_contra_artefacto_real",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "Portado de MAGI v5.16.0 con sus tests. Alli figuraba tambien como SIN COMPROBAR contra un juego real; el port no cambia eso.",
+  "veces_ok": 0,
+  "veces_mal": 0
+ }
+]

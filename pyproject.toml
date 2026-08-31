@@ -6,7 +6,7 @@
 
 [project]
 name = "venicemagi"
-version = "2.0.0"
+version = "2.2.0"
 description = "Variante MAGI cloud-first gratuita: enjambre dialéctico sobre proveedores guest sin key ni login, con IDE real sobre tu máquina."
 requires-python = ">=3.10"
 
