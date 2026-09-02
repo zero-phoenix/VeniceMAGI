@@ -142,5 +142,14 @@
   "evidencia": "REFUTADA Y ARREGLADA el mismo dia. EXCLUIDOS tenia 'venv' y '.venv-lock' pero no '.venv', que es literalmente el nombre que las instrucciones de instalacion del README mandan crear. Medido: mismo commit, 87 huerfanos sin entorno virtual y 78 con un .venv dentro del repo. Nueve piezas pasaban por conectadas porque su nombre aparecia en site-packages. Y lo rompia HACIA ABAJO, que es la direccion que no avisa: un conteo que baja parece una mejora, y el test que obliga a bajar el techo habria invitado a consolidar como logro un margen inexistente. El comentario de 2026-08-16 ya contaba que este mismo problema se pago una vez con site-packages.",
   "veces_ok": 1,
   "veces_mal": 1
+ },
+ {
+  "texto": "La suite termina sin dejar tareas asincronas colgando",
+  "prueba": "sin_fugas_en_el_teardown",
+  "estado": "refutada",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "Cuatro ERROR at teardown por corrida en test_rpc_handlers_arrancan.py, con las aserciones pasando todas: cada kernel construido arrancaba un MagiBus._worker() de fondo y nadie lo paraba. MagiBus.shutdown() ya estaba escrito; solo faltaba llamarlo. Con la fixture que cancela las tareas del bus bajan de 4 a 1. El que queda sale de test_ningun_handler_falla_por_un_import, que invoca TODOS los handlers RPC: la fuga es de alguno de ellos -sesiones aiohttp de g4f sin cerrar-, no del bus, y hace falta auditar handler por handler. Un error de teardown es peor que uno normal: no senala a la linea que falla, se lee como ruido y se aprende a ignorar. Queda declarado en vez de escondido.",
+  "veces_ok": 0,
+  "veces_mal": 1
  }
 ]

@@ -48,11 +48,49 @@ def _kernel_handlers() -> dict:
     from vmagi.core.kernel import Kernel
 
     bus = MagiBus()
+    _BUSES_ABIERTOS.append(bus)
     try:
         k = Kernel(bus=bus, blackboard=Blackboard())
     except TypeError:
         k = Kernel(bus)
     return k, dict(k.rpc.handlers)
+
+
+#: Cada kernel que se construye aquí arranca un `MagiBus._worker()` de fondo, y
+#: nadie los paraba. Al cerrarse el bucle del test quedaban tareas pendientes y
+#: pytest lo reportaba como ERROR *en el teardown* — cuatro por corrida,
+#: mientras las aserciones pasaban todas. Un error de teardown es peor que uno
+#: normal: no señala a la línea que falla, se lee como ruido, y se aprende a
+#: ignorar. Y aquí además escondía una fuga de verdad, en el mismo bus cuyo
+#: bloqueo tumbó la aplicación entera y por el que existe este fichero.
+#:
+#: `MagiBus.shutdown()` ya estaba escrito. Solo faltaba llamarlo.
+_BUSES_ABIERTOS: list[MagiBus] = []
+
+
+@pytest.fixture(autouse=True)
+def _cierra_los_buses():
+    """Síncrono a propósito: la fuga también la dejan los tests que NO son
+    asíncronos, y una fixture `async` solo se aplica a los que sí.
+
+    No se puede `await bus.shutdown()` desde aquí, así que se cancelan las
+    tareas directamente. Cancelar sin esperar basta para lo que se persigue:
+    una tarea cancelada ya no se destruye «pendiente», que es lo que hacía
+    aparecer el error en el teardown.
+    """
+    yield
+    for bus in _BUSES_ABIERTOS:
+        tareas = (list(getattr(bus, "_worker_tasks", []))
+                  + list(getattr(bus, "_sink_tasks", [])))
+        for t in tareas:
+            if not t.done():
+                t.cancel()
+        try:
+            bus._worker_tasks.clear()
+            bus._pending_workers.clear()
+        except Exception:          # pragma: no cover
+            pass                   # limpiar no puede hacer fallar un test
+    _BUSES_ABIERTOS.clear()
 
 
 def test_el_kernel_registra_handlers():
