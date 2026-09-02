@@ -80,17 +80,34 @@ class ResultadoBucle:
     ultimo_reintento: list[str] = field(default_factory=list)
     motivo: str = ""
     medida: MedidaEstilo | None = None
+    #: Pasadas en las que el generador no devolvió fichero. Va aparte del
+    #: conteo de ejes incumplidos porque son dos averías distintas y llevan a
+    #: dos sitios distintos: una se arregla en la dirección artística y la
+    #: otra en el generador.
+    fallos_de_generacion: int = 0
+    historial_nota: str = ""
 
     @property
     def ok(self) -> bool:
         return self.estado == "convergido"
 
+    @property
+    def genero_algo(self) -> bool:
+        return bool(self.ruta) and self.fallos_de_generacion < self.version
+
     def render(self) -> str:
         lineas = [f"estado: {self.estado} (pasadas: {self.version})"]
         for h in self.historial:
+            if h.get("nota"):
+                lineas.append(f"  v{h['version']}: {h['nota']}")
+            else:
+                lineas.append(f"  v{h['version']}: {h['failed']} ejes "
+                              f"incumplidos")
+        if self.fallos_de_generacion:
             lineas.append(
-                f"  v{h['version']}: {h['failed']} ejes incumplidos"
-                + (f" · {h['nota']}" if h.get("nota") else ""))
+                f"AVISO: el generador falló en {self.fallos_de_generacion} de "
+                f"{self.version} pasadas. Lo que hay que mirar es el "
+                f"generador, no la dirección artística.")
         if self.motivo:
             lineas.append(f"motivo: {self.motivo}")
         if self.ultimo_reintento:
@@ -143,10 +160,21 @@ async def rueda_hasta_cumplir(
         nonlocal ultima_medida, ultimas_correcciones
         destino = await generar(version, list(ultimas_correcciones))
         if destino is None:
-            ultimas_correcciones = ["la generación no produjo ningún fichero"]
-            # Se devuelve el peor resultado posible en vez de una excepción:
-            # una pasada fallida es información para la meseta, no el final
-            # del bucle. Si falla dos veces seguidas, la meseta lo corta sola.
+            # NO ES UN FALLO DE ESTILO Y NO PUEDE PARECERLO.
+            #
+            # La primera versión metía «la generación no produjo ningún
+            # fichero» en la lista de correcciones y devolvía el peor conteo
+            # posible. Visto en la prueba de extremo a extremo: el bucle
+            # informaba «meseta: dos pasadas sin mejorar ningún eje medible»
+            # cuando lo que pasaba es que NO SE HABÍA GENERADO NADA las dos
+            # veces. El diagnóstico correcto —el generador está roto— quedaba
+            # enterrado bajo un diagnóstico de dirección artística.
+            #
+            # Ahora se cuenta aparte y se dice en el motivo. Es la misma regla
+            # que separa «no he podido comprobarlo» de «está mal».
+            res.fallos_de_generacion += 1
+            res.historial_nota = "la generación no produjo ningún fichero"
+            ultimas_correcciones = []
             return len(biblia.tolerancias) or 1
         p = Path(destino)
         rutas[version] = str(p)
@@ -183,13 +211,28 @@ async def rueda_hasta_cumplir(
     ultimo_fallo, meseta = duros, 0
 
     for v in range(1, motor.max_versions + 1):
+        res.historial_nota = ""
         fallos = await _mide(v)
-        res.historial.append({"version": v, "failed": fallos})
+        res.historial.append({"version": v, "failed": fallos,
+                              "nota": res.historial_nota})
         res.version, res.ruta = v, rutas.get(v, res.ruta)
         res.medida, res.ultimo_reintento = ultima_medida, ultimas_correcciones
 
         if fallos == 0:
             res.estado = "convergido"
+            return res
+
+        # Dos fallos de generación seguidos se cortan por su propia puerta, y
+        # con su propio nombre. Dejarlos caer en la meseta produce el informe
+        # equivocado: «no mejora ningún eje medible» cuando lo cierto es que
+        # no se ha medido nada porque no se ha generado nada.
+        if res.fallos_de_generacion >= 2:
+            res.estado = "sin_generar"
+            res.motivo = (
+                f"el generador falló {res.fallos_de_generacion} veces "
+                f"seguidas. No es un problema de dirección artística: no hubo "
+                f"corte que juzgar. Revisa el generador antes de tocar la "
+                f"biblia.")
             return res
 
         meseta = meseta + 1 if fallos >= ultimo_fallo else 0

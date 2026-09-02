@@ -228,15 +228,32 @@ async def test_no_suspende_por_ejes_que_no_estan_en_el_contrato(tmp_path):
     assert r.medida is not None and r.medida.no_medido
 
 
-async def test_una_generacion_fallida_no_revienta_el_bucle():
-    """Devolver None es una pasada perdida, no el final. Dos seguidas las
-    corta la meseta sola, que es donde tiene que cortarlas."""
+async def test_un_generador_roto_no_se_diagnostica_como_fallo_de_estilo():
+    """«No se generó nada» y «lo generado no cumple» llevan a sitios distintos.
+
+    EL FALLO QUE ESTE TEST FIJA, VISTO EN LA PRUEBA DE EXTREMO A EXTREMO. La
+    primera versión metía «la generación no produjo ningún fichero» en la
+    lista de correcciones de estilo y devolvía el peor conteo posible. El
+    bucle informaba entonces:
+
+        meseta: dos pasadas seguidas sin mejorar ningún eje medible
+
+    ...cuando lo que pasaba es que no se había generado nada las dos veces. El
+    diagnóstico correcto —el generador está roto— quedaba enterrado bajo uno
+    de dirección artística, y quien leyera el informe se pondría a tocar la
+    biblia. Una avería mal nombrada manda a arreglar el sitio equivocado.
+    """
     async def generar(v, c):
         return None
 
     r = await B.rueda_hasta_cumplir("plano fijo", _biblia(), generar)
-    assert r.estado in ("meseta", "agotado")
+    assert r.estado == "sin_generar", r.render()
+    assert r.fallos_de_generacion >= 2
+    assert not r.genero_algo
+    assert "generador" in r.motivo, "no señala al generador"
+    assert "biblia" in r.motivo, "no dice qué NO hay que tocar"
     assert r.historial, "no dejó rastro de las pasadas perdidas"
+    assert "generación no produjo" in r.render()
 
 
 @sin_ffmpeg

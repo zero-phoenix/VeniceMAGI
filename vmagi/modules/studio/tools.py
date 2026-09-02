@@ -398,33 +398,101 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
         if ctx and getattr(ctx, "journal", None):
             ctx.journal.record(destino, "create", tool="animatica_hasta_cumplir")
         destino.parent.mkdir(parents=True, exist_ok=True)
+
+        # SE LEE LA BIBLIA ANTES DE LA PRIMERA PASADA, no después de fallarla.
+        #
+        # Medido en la prueba de extremo a extremo: con Ken Burns activado, la
+        # animática mide 11,31 px de movimiento de cámara contra una biblia que
+        # pide 0 ± 0,2. Ken Burns ES un movimiento de cámara — es literalmente
+        # su propósito—, así que arrancar con él encendido frente a una
+        # dirección de cámara fija garantiza suspender la primera pasada por
+        # algo que estaba escrito en el contrato desde el principio.
+        #
+        # Reaccionar es correcto cuando no se sabía. Aquí sí se sabía: gastar
+        # una pasada entera en descubrirlo es gastar ración por no leer.
+        from .estilo import UMBRAL_CAMARA_FIJA
+        tol = {t.eje: t for t in b.tolerancias}
         estado = {"seg": float(segundos_por_plano), "ken": True}
+        sembrado: list[str] = []
+        if "camara_px" in tol:
+            techo = tol["camara_px"].objetivo + tol["camara_px"].margen
+            if techo <= UMBRAL_CAMARA_FIJA:
+                estado["ken"] = False
+                sembrado.append(
+                    f"ken_burns apagado de entrada: la biblia pide la cámara "
+                    f"por debajo de {techo:.2f} px")
+        if "duracion_media_plano" in tol:
+            estado["seg"] = max(0.6, tol["duracion_media_plano"].objetivo)
+            sembrado.append(
+                f"{estado['seg']:.2f}s por plano, tomado de la biblia en vez "
+                f"del valor por defecto")
+
+        # Etalonaje. Sin estas tres palancas el bucle podía MEDIR que la
+        # paleta no cuadra y volver a montar exactamente la misma imagen
+        # cuatro veces: diagnosticaba lo que no podía corregir. Medido en la
+        # prueba de extremo a extremo antes de existir: «saturacion 0.470 y el
+        # objetivo es 0.2553, hay que BAJARLO» repetido pasada tras pasada,
+        # con los parámetros de montaje idénticos.
+        estado.update({"sat": 1.0, "brillo": 0.0, "contraste": 1.0})
+
+        def _grado() -> str:
+            partes = []
+            if abs(estado["sat"] - 1.0) > 0.01:
+                partes.append(f"saturation={estado['sat']:.3f}")
+            if abs(estado["brillo"]) > 0.005:
+                partes.append(f"brightness={estado['brillo']:.3f}")
+            if abs(estado["contraste"] - 1.0) > 0.01:
+                partes.append(f"contrast={estado['contraste']:.3f}")
+            return ":".join(partes)
 
         async def generar(version: int, correcciones: list):
             for c in correcciones:
-                if c.startswith("camara_px") and "BAJARLO" in c:
+                baja = "BAJARLO" in c
+                if c.startswith("camara_px") and baja:
                     estado["ken"] = False
-                elif c.startswith("fraccion_camara_fija") and "SUBIRLO" in c:
+                elif c.startswith("fraccion_camara_fija") and not baja:
                     estado["ken"] = False
                 elif c.startswith("duracion_media_plano"):
-                    estado["seg"] *= 1.6 if "SUBIRLO" in c else 0.65
+                    estado["seg"] *= 0.65 if baja else 1.6
+                elif c.startswith("saturacion"):
+                    # Topes a propósito: `eq` admite saturación 0-3, y dejar
+                    # que el bucle se pase produce una imagen gris o de cómic
+                    # que ya no se parece a nada, pero que puede acercarse por
+                    # casualidad en el eje que se estaba persiguiendo.
+                    estado["sat"] = min(2.5, max(0.15, estado["sat"]
+                                                * (0.72 if baja else 1.35)))
+                elif c.startswith("luma"):
+                    estado["brillo"] = min(0.5, max(
+                        -0.5, estado["brillo"] + (-0.10 if baja else 0.10)))
+                elif c.startswith("contraste"):
+                    estado["contraste"] = min(
+                        2.2, max(0.3, estado["contraste"]
+                                 * (0.75 if baja else 1.3)))
             spec = VideoSpec(
                 slides=[Slide(r, max(0.6, estado["seg"])) for r in rutas],
-                ken_burns=estado["ken"])
+                ken_burns=estado["ken"], grado=_grado())
             obs = await render_slideshow(spec, destino)
             return destino if obs.ok else None
 
         r = await rueda_hasta_cumplir(encargo, b, generar)
-        cuerpo = [r.render(), f"parámetros finales: "
-                  f"{estado['seg']:.2f}s por plano, "
-                  f"ken_burns={'sí' if estado['ken'] else 'no'}"]
+        cuerpo = []
+        if sembrado:
+            cuerpo.append("sembrado desde la biblia ANTES de la 1ª pasada:")
+            cuerpo += [f"  · {s}" for s in sembrado]
+        cuerpo += [r.render(), f"parámetros finales: "
+                   f"{estado['seg']:.2f}s por plano, "
+                   f"ken_burns={'sí' if estado['ken'] else 'no'}, "
+                   f"etalonaje={_grado() or 'ninguno'}"]
         if r.medida is not None and r.medida.no_medido:
             cuerpo.append("sin juzgar (fuera del contrato):")
             cuerpo += [f"  · {s}" for s in r.medida.no_medido]
         return ToolResult(r.ok, "\n".join(cuerpo),
                           error=None if r.ok else (r.motivo or r.estado),
                           meta={"estado": r.estado, "path": str(destino),
-                                "pasadas": r.version})
+                                "pasadas": r.version,
+                                "fallos_de_generacion": r.fallos_de_generacion,
+                                "genero_algo": r.genero_algo,
+                                "sembrado": sembrado})
 
     @reg.tool("cascaron_estado",
               "Dice qué sabe percibir esta máquina en local (escala de plano, "
@@ -537,22 +605,28 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
             return abs(d.obtenido - d.objetivo) / d.margen
 
         graves = sorted(v.incumplidos, key=_gravedad, reverse=True)[:3]
-        if not v.aprueba:
-            if graves:
-                cuerpo.append("\nLO MÁS GRAVE PRIMERO:")
-                cuerpo += [
-                    f"  · {d.eje}: se pasa {_gravedad(d):.1f}x del margen"
-                    for d in graves]
+        correcciones = v.lista_para_reintento()
+        # La cabecera solo se escribe si hay algo debajo. Un «QUÉ CORREGIR EN
+        # LA SIGUIENTE PASADA:» seguido de nada le dice al nodo que hay
+        # trabajo pendiente y no le dice cuál — y la prueba de extremo a
+        # extremo lo sacó impreso exactamente así.
+        if graves:
+            cuerpo.append("\nLO MÁS GRAVE PRIMERO:")
+            cuerpo += [f"  · {d.eje}: se pasa {_gravedad(d):.1f}x del margen"
+                       for d in graves]
+        if correcciones:
             cuerpo.append("\nQUÉ CORREGIR EN LA SIGUIENTE PASADA:")
-            cuerpo += [f"  - {f}" for f in v.lista_para_reintento()]
-            cuerpo += [f"  - sin juzgar: {s}" for s in v.sin_juzgar]
+            cuerpo += [f"  - {f}" for f in correcciones]
+        if v.sin_juzgar:
+            cuerpo.append("\nFUERA DEL CONTRATO, sin mirar (no suspende):")
+            cuerpo += [f"  - {s}" for s in v.sin_juzgar]
         return ToolResult(
             v.aprueba, "\n".join(cuerpo),
             error=None if v.aprueba else
-            f"{len(v.incumplidos)} ejes incumplidos, "
-            f"{len(v.sin_juzgar)} sin juzgar",
-            meta={"aprueba": v.aprueba,
+            f"{len(v.incumplidos)} ejes incumplidos",
+            meta={"aprueba": v.aprueba, "sin_dudas": v.sin_dudas,
                   "incumplidos": [d.eje for d in v.incumplidos],
-                  "reintento": v.lista_para_reintento()})
+                  "sin_juzgar": list(v.sin_juzgar),
+                  "reintento": correcciones})
 
     return reg

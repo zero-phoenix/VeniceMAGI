@@ -118,7 +118,12 @@ SCRIPT = RAIZ / "scripts" / "huerfanos.py"
 # derechos completo, y ningún llamador. Conectarlos al medidor de estilo
 # retira `AutoCorrectionLoop`, `SpecError`, `RightsGate` y `RightsBlockedError`
 # de la lista, y de paso el bucle del plan pasa a medir ficheros de verdad.
-TECHO = 84
+# 83 el mismo día: cablear el bucle de autocorrección al medidor conectó una
+# pieza más de las que había señaladas. El techo baja con el conteo aunque el
+# test todavía no obligue —su margen es de cinco—, porque un margen que se
+# deja sin consolidar es margen que se puede volver a gastar sin que nadie se
+# entere, y esa es la mitad del mecanismo que siempre se olvida.
+TECHO = 83
 
 #: techos por paquete (2026-08-16, tras archivar 6 paquetes sin importadores:
 #: device, fabrication, vision, reasoning, os_portable, capabilities -> _attic). El total puede

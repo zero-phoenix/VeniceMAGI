@@ -371,8 +371,38 @@ def _desplazamiento_global(a, b, maxd: int = BUSQUEDA_MAX):
 
 
 def _histograma(gris, bins: int = 48):
+    """Histograma NORMALIZADO en exposición, para que un corte sea un corte.
+
+    EL ACOPLAMIENTO QUE ESTO ROMPE, ENCONTRADO EJECUTÁNDOLO
+    =======================================================
+    Un corte es un cambio de CONTENIDO. Comparar histogramas crudos lo
+    confunde con un cambio de EXPOSICIÓN, y eso no es una sutileza teórica:
+    en cuanto el bucle de autocorrección aprendió a etalonar para acercar la
+    paleta a la biblia, empezó a aplanar el contraste —`contrast=0.422`— y al
+    aplanarlo los histogramas de dos planos distintos se parecían lo bastante
+    como para caer por debajo del umbral. Los cortes DESAPARECÍAN.
+
+    Consecuencia medida: el mismo montaje pasaba de 3 planos a 2, la duración
+    media de plano se disparaba de 5,7 s a 13,9 s, y el bucle se ponía a
+    corregir la duración de los planos por un cambio que había hecho él mismo
+    en el color. Corregir un eje rompía la medición de otro, y el sistema
+    perseguía su propio reflejo.
+
+    Se estira cada fotograma a rango completo antes de contar. Así un cambio
+    global de brillo o de contraste no mueve el histograma, y lo que lo mueve
+    es lo que tiene que moverlo: que en el cuadro haya otra cosa.
+
+    El guardia del rango pequeño no es cosmético: un fotograma casi plano —un
+    fundido a negro, una pared— tiene un rango de dos o tres niveles, y
+    estirarlo a 255 amplifica el ruido de compresión hasta convertir dos
+    fotogramas idénticos en un corte.
+    """
     import numpy as np
-    h, _ = np.histogram(gris, bins=bins, range=(0, 255))
+    g = np.asarray(gris, dtype=np.float32)
+    lo, hi = float(g.min()), float(g.max())
+    if hi - lo > 12.0:
+        g = (g - lo) * (255.0 / (hi - lo))
+    h, _ = np.histogram(g, bins=bins, range=(0, 255))
     s = h.sum()
     return h / s if s else h.astype(float)
 
@@ -381,6 +411,41 @@ def _distancia_hist(h1, h2) -> float:
     """Distancia L1 normalizada entre histogramas, de 0 a 1."""
     import numpy as np
     return float(np.abs(h1 - h2).sum() / 2.0)
+
+
+def _une_transiciones(picos: list[int]) -> list[int]:
+    """Un encadenado es UN corte, no tres.
+
+    EL FALLO QUE ESTO CIERRA, ENCONTRADO EJECUTÁNDOLO
+    =================================================
+    Un corte seco es un salto instantáneo: un único pico de distancia entre
+    dos fotogramas consecutivos. Un encadenado dura medio segundo, y a 5
+    muestras por segundo eso son dos o tres pares seguidos por encima del
+    umbral. Contarlos sueltos convierte cada transición gradual en dos o tres
+    cortes.
+
+    Medido en la prueba de extremo a extremo del 2026-09-02: una animática de
+    TRES imágenes con encadenados salía con **6 planos**, y la duración media
+    de plano por tanto a la mitad de la real. Y eso no se quedó en un número
+    feo: el bucle de autocorrección leyó «los planos duran poco, SÚBELOS» y
+    subió de 6 a 15,36 segundos por plano persiguiendo un objetivo que nunca
+    podía alcanzar, porque el error no estaba en la duración sino en el
+    recuento. Una medida mal hecha no da un informe peor: da un sistema que
+    corrige en la dirección equivocada con toda la autoridad de un dato.
+
+    Se unen los índices CONSECUTIVOS, y solo esos. Un corte seco real sigue
+    siendo un pico aislado, así que el montaje rápido no se penaliza: lo que
+    se colapsa es exactamente la firma de una transición gradual.
+    """
+    if not picos:
+        return []
+    unidos = [picos[0]]
+    for p in picos[1:]:
+        if p != unidos[-1] + 1:
+            unidos.append(p)
+        else:
+            unidos[-1] = p          # sigue el mismo fundido: se extiende
+    return unidos
 
 
 async def _mide_imagen(ruta: Path, medida: MedidaEstilo) -> None:
@@ -455,14 +520,32 @@ async def _mide_imagen(ruta: Path, medida: MedidaEstilo) -> None:
         hists = [_histograma(g) for g in grises]
         distancias = [_distancia_hist(hists[i], hists[i + 1])
                       for i in range(len(hists) - 1)]
-        cortes = [i for i, d in enumerate(distancias) if d > UMBRAL_CORTE]
+        # SE DESCARTAN LOS EXTREMOS, y no por comodidad.
+        #
+        # Un pico en el primer par significaría que el plano de apertura dura
+        # una sola muestra: 0,2 s a 5 fps. Eso no es un montaje, es el
+        # decodificador arrancando — medido sobre un vídeo con 3 cortes
+        # exactos, el detector encontraba 4, y el sobrante estaba siempre en
+        # el índice 0 con una distancia de 0,586 entre dos fotogramas del
+        # MISMO plano. `extract_frames` en `video.py` ya evita los extremos
+        # por la misma razón y lo dice en su docstring.
+        #
+        # El coste está declarado: un primer o último plano más corto que una
+        # muestra no se cuenta. Este instrumento no puede medir esa duración
+        # de todas formas, así que no se pierde nada que se supiera.
+        interior = range(1, max(1, len(distancias) - 1))
+        picos = [i for i in interior if distancias[i] > UMBRAL_CORTE]
+        cortes = _une_transiciones(picos)
         medida.planos = len(cortes) + 1
         if medida.duracion > 0:
             medida.duracion_media_plano = round(
                 medida.duracion / max(1, medida.planos), 3)
+        fundidos = len(picos) - len(cortes)
         medida.evidencia.append(
             f"{len(marcos)} fotogramas muestreados a {MUESTREO_FPS} fps · "
-            f"{len(cortes)} cortes detectados")
+            f"{len(cortes)} cortes detectados"
+            + (f" ({fundidos} picos unidos: transiciones graduales)"
+               if fundidos else ""))
 
         # --- cámara contra sujeto -------------------------------------------
         # Solo se miden pares DENTRO del mismo plano. Medir a través de un

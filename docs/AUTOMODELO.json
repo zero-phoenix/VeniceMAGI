@@ -146,10 +146,55 @@
  {
   "texto": "La suite termina sin dejar tareas asincronas colgando",
   "prueba": "sin_fugas_en_el_teardown",
-  "estado": "refutada",
+  "estado": "sostenida",
   "ultima": "2026-09-02 00:00",
-  "evidencia": "Cuatro ERROR at teardown por corrida en test_rpc_handlers_arrancan.py, con las aserciones pasando todas: cada kernel construido arrancaba un MagiBus._worker() de fondo y nadie lo paraba. MagiBus.shutdown() ya estaba escrito; solo faltaba llamarlo. Con la fixture que cancela las tareas del bus bajan de 4 a 1. El que queda sale de test_ningun_handler_falla_por_un_import, que invoca TODOS los handlers RPC: la fuga es de alguno de ellos -sesiones aiohttp de g4f sin cerrar-, no del bus, y hace falta auditar handler por handler. Un error de teardown es peor que uno normal: no senala a la linea que falla, se lee como ruido y se aprende a ignorar. Queda declarado en vez de escondido.",
-  "veces_ok": 0,
+  "evidencia": "Cuatro ERROR at teardown por corrida con las aserciones pasando todas. Al mirar QUE colgaba en vez de suponerlo aparecieron dos averias distintas: tres MagiBus._worker() de buses construidos fuera del arnes, y un SwarmOrchestrator._orchestrate_loop() que arranca al invocar un handler. Perseguirlas de una en una arreglaba esas dos y dejaba abierta la de manana. Guarda general: se cancela toda tarea creada durante el test que siga viva y se ESPERA a que muera -sin el gather la tarea se destruye igual 'pendiente' y el error sigue saliendo-. Medido despues: 0 ERROR, 0 FAILED, 0 tareas colgando.",
+  "veces_ok": 1,
   "veces_mal": 1
+ },
+ {
+  "texto": "Un encadenado se cuenta como UN corte, no como varios",
+  "prueba": "transiciones_graduales",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA el mismo dia, encontrada EJECUTANDO el sistema y no leyendolo. Un corte seco es un pico aislado de distancia entre histogramas; un encadenado de medio segundo, a 5 muestras por segundo, son dos o tres pares seguidos por encima del umbral. Medido: una animatica de TRES imagenes salia con SEIS planos y la duracion media de plano a la mitad. Y no se quedo en un numero feo: el bucle de autocorreccion leyo 'los planos duran poco, SUBELOS' y subio de 6 a 15,36 segundos por plano persiguiendo un objetivo inalcanzable, porque el error estaba en el recuento y no en la duracion. Una medida mal hecha no da un informe peor: da un sistema que corrige en la direccion equivocada con toda la autoridad de un dato. _une_transiciones() une solo indices CONSECUTIVOS, asi que el montaje rapido no se penaliza.",
+  "veces_ok": 1,
+  "veces_mal": 1
+ },
+ {
+  "texto": "Un corte que cumple el contrato APRUEBA aunque la maquina no lo haya visto todo",
+  "prueba": "aprobar_el_contrato_no_es_verlo_todo",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA. Veredicto.aprueba exigia ademas que no hubiera nada sin juzgar. La prueba de extremo a extremo lo enseno en una linea: 'NO APRUEBA - 0 incumplidos, 2 sin juzgar', y eso era la REFERENCIA contra la biblia sacada de ella misma. Los dos 'sin juzgar' eran 'OpenCV no esta' y 'el fichero no tiene pista de audio': cosas que ni aparecen en el contrato. Con esa regla, en una maquina sin OpenCV no aprueba nada nunca y un enjambre que reintente contra ese veredicto no para jamas. La quinta regla la sigue cumpliendo compara(), que convierte un eje DE LA BIBLIA sin medir en incumplido. Se anade sin_dudas para la otra pregunta, que es distinta y tambien hace falta.",
+  "veces_ok": 1,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El bucle lee la biblia antes de la primera pasada, no despues de fallarla",
+  "prueba": "siembra_desde_el_contrato",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "Medido antes: con Ken Burns activado por defecto la animatica daba 11,31 px de movimiento de camara y 0% de planos fijos contra una biblia que pide 0 +-0,2. Ken Burns ES movimiento de camara -ese es su proposito-, asi que arrancar con el encendido frente a una direccion de camara fija garantiza suspender la primera pasada por algo escrito en el contrato desde el principio. Reaccionar es correcto cuando no se sabia; aqui se sabia, y gastar una pasada en descubrirlo es gastar racion por no leer. Medido despues: 0,00 px y 100% de planos fijos.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Un corte se detecta por cambio de CONTENIDO, no de exposicion",
+  "prueba": "cortes_invariantes_al_etalonaje",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "ACOPLAMIENTO ENCONTRADO EJECUTANDO EL SISTEMA, no leyendolo. En cuanto el bucle aprendio a etalonar para acercar la paleta a la biblia, empezo a aplanar el contraste (contrast=0.422) y al aplanarlo los histogramas de dos planos distintos caian por debajo del umbral: los cortes DESAPARECIAN. Medido: el mismo montaje pasaba de 3 planos a 2, la duracion media de plano se disparaba de 5,7 s a 13,9 s, y el bucle se ponia a corregir la duracion por un cambio que habia hecho el mismo en el color. Corregir un eje rompia la medicion de otro, y el sistema perseguia su propio reflejo. Se estira cada fotograma a rango completo antes de contar, con guardia para fotogramas casi planos.",
+  "veces_ok": 1,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El bucle tiene una palanca para cada eje que sabe medir",
+  "prueba": "diagnosticar_solo_lo_corregible",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "Antes: el bucle MEDIA la paleta -luma, saturacion, contraste- y no tenia con que moverla. Decia 'saturacion 0.470 y el objetivo es 0.2553, hay que BAJARLO' y volvia a montar la misma imagen igual de saturada, pasada tras pasada. Un bucle que diagnostica lo que no puede corregir gasta racion para repetir el mismo informe. VideoSpec.grado anade la etapa de etalonaje y el bucle la mueve con topes -eq admite saturacion 0-3, y dejar que se pase produce una imagen gris que ya no se parece a nada pero puede acertar por casualidad en el eje que se perseguia.",
+  "veces_ok": 1,
+  "veces_mal": 0
  }
 ]

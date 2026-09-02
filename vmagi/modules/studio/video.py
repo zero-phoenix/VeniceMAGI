@@ -389,6 +389,20 @@ class VideoSpec:
     ken_burns: bool = True
     crossfade: float = 0.5
     audio: str = ""
+    #: Etapa de ETALONAJE, en la sintaxis del filtro `eq` de FFmpeg
+    #: (p. ej. "brightness=-0.08:saturation=0.7:contrast=0.9").
+    #:
+    #: Existe porque el bucle de autocorrección medía la paleta —luma,
+    #: saturación, contraste— y no tenía ninguna palanca para moverla: podía
+    #: decir «la imagen sale demasiado saturada» y volver a montarla igual de
+    #: saturada cuatro veces. Un bucle que diagnostica lo que no puede
+    #: corregir gasta ración para repetir el mismo informe.
+    #:
+    #: Cadena libre y no tres números porque el etalonaje real usa más ejes de
+    #: los que hoy se miden, y encerrarlo en un dataclass de tres campos
+    #: obligaría a tocar esta clase cada vez que el medidor aprenda a mirar
+    #: otra cosa.
+    grado: str = ""
 
     @property
     def duration(self) -> float:
@@ -451,9 +465,14 @@ def _ken_burns_filter(spec: VideoSpec, idx: int, slide: Slide) -> str:
     escala = f"scale={w * 2}:{h * 2}:force_original_aspect_ratio=increase"
     recorte = f"crop={w * 2}:{h * 2}"
 
+    # El etalonaje va al FINAL de la cadena de cada diapositiva, después del
+    # escalado y del recorte. Antes, `zoompan` remuestrearía píxeles ya
+    # corregidos y el color medido no sería el color aplicado.
+    grado = f",eq={spec.grado}" if spec.grado else ""
+
     if not spec.ken_burns:
         return (f"[{idx}:v]fps={spec.fps},{escala},{recorte},scale={w}:{h},"
-                f"setsar=1[v{idx}]")
+                f"setsar=1{grado}[v{idx}]")
 
     # Alterna acercar y alejar: el mismo movimiento en todas las diapositivas
     # se nota más que el propio efecto.
@@ -464,7 +483,7 @@ def _ken_burns_filter(spec: VideoSpec, idx: int, slide: Slide) -> str:
     return (f"[{idx}:v]fps={spec.fps},{escala},{recorte},"
             f"zoompan=z='{z}':d=1:s={w}x{h}:fps={spec.fps}"
             f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',"
-            f"setsar=1[v{idx}]")
+            f"setsar=1{grado}[v{idx}]")
 
 
 def build_filtergraph(spec: VideoSpec) -> str:

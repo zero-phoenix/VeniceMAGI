@@ -128,13 +128,40 @@ class Veredicto:
 
     @property
     def aprueba(self) -> bool:
-        """Aprueba solo si TODO lo comprobable cumple y no falta nada.
+        """Cumple el CONTRATO: ningún eje de la biblia incumplido.
 
-        Un eje que no se pudo medir NO aprueba por omisión. Es la quinta
-        regla del proyecto, y es la que se saltó `observe_video` cuando sin
-        Pillow devolvía «correcto» sobre una captura que nunca abrió.
+        EL FALLO QUE ESTO CIERRA, ENCONTRADO EJECUTÁNDOLO
+        =================================================
+        La primera versión exigía además `not self.sin_juzgar`, con el
+        argumento de que un eje sin medir no puede aprobar por omisión. El
+        argumento es bueno; la aplicación estaba mal, y la prueba de extremo a
+        extremo del 2026-09-02 lo enseñó en una línea:
+
+            NO APRUEBA · 0 incumplidos, 2 sin juzgar
+
+        Eso era la REFERENCIA comparada contra la biblia sacada de ella misma.
+        Los dos «sin juzgar» eran «OpenCV no está» y «el fichero no tiene pista
+        de audio» — dos cosas que ni siquiera aparecen en el contrato. Con esa
+        regla, en una máquina sin OpenCV **no aprueba nada, nunca**, y un
+        enjambre que reintente contra ese veredicto no para jamás.
+
+        La quinta regla se sigue cumpliendo, y la cumple `compara()`: un eje
+        que SÍ está en la biblia y no se pudo medir ya sale como `Desvio`
+        incumplido. Lo de fuera del contrato es información, no un suspenso, y
+        para eso está `sin_dudas`.
         """
-        return not self.incumplidos and not self.sin_juzgar
+        return not self.incumplidos
+
+    @property
+    def sin_dudas(self) -> bool:
+        """Cumple el contrato Y no quedó nada sin mirar en todo el fichero.
+
+        Se separa de `aprueba` porque son dos preguntas distintas y quien
+        decide necesita las dos: «¿cumple lo que le pedí?» y «¿hay algo que
+        este instrumento no ha llegado a ver?». Fundirlas es lo que hacía que
+        la respuesta a la primera dependiera de una carencia de la máquina.
+        """
+        return self.aprueba and not self.sin_juzgar
 
     def render(self) -> str:
         lineas = []
@@ -146,9 +173,13 @@ class Veredicto:
                 f"±{d.margen:.4g} · obtenido {obt}")
         for s in self.sin_juzgar:
             lineas.append(f"  ????  {s}")
-        cab = ("APRUEBA" if self.aprueba
-               else f"NO APRUEBA · {len(self.incumplidos)} incumplidos, "
-                    f"{len(self.sin_juzgar)} sin juzgar")
+        if self.aprueba:
+            cab = "APRUEBA" if self.sin_dudas else (
+                f"APRUEBA el contrato · {len(self.sin_juzgar)} cosas del "
+                f"fichero quedaron sin mirar (fuera del contrato)")
+        else:
+            cab = (f"NO APRUEBA · {len(self.incumplidos)} incumplidos, "
+                   f"{len(self.sin_juzgar)} sin juzgar")
         return cab + "\n" + "\n".join(lineas)
 
     def lista_para_reintento(self) -> list[str]:

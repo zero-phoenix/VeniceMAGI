@@ -171,6 +171,121 @@ async def test_cuenta_los_cortes_que_hay(cuatro_planos):
     assert 1.6 <= m.duracion_media_plano <= 2.4, m.duracion_media_plano
 
 
+def test_el_etalonaje_entra_en_el_grafo_de_filtros():
+    """La palanca de paleta tiene que llegar a FFmpeg, con y sin Ken Burns.
+
+    Función pura, así que se comprueba sin arrancar FFmpeg — el mismo motivo
+    por el que `build_filtergraph` está separada de la ejecución. Y las dos
+    ramas, porque son dos cadenas de filtros distintas y es exactamente el
+    sitio donde una se arregla y la otra se olvida.
+    """
+    from vmagi.modules.studio.video import Slide, VideoSpec, build_filtergraph
+
+    diapos = [Slide("a.png", 2.0), Slide("b.png", 2.0)]
+    for ken in (True, False):
+        sin = build_filtergraph(VideoSpec(slides=diapos, ken_burns=ken))
+        con = build_filtergraph(VideoSpec(slides=diapos, ken_burns=ken,
+                                          grado="saturation=0.700"))
+        assert "eq=" not in sin, f"ken_burns={ken}: metió eq sin pedirlo"
+        assert con.count("eq=saturation=0.700") == len(diapos), (
+            f"ken_burns={ken}: el etalonaje no llegó a todas las diapositivas")
+        # Va al final de la cadena de cada una, después del escalado.
+        assert "eq=saturation=0.700[v0]" in con, con[:200]
+
+
+def test_un_encadenado_es_un_corte_y_no_tres():
+    """La función pura, con los casos que importan.
+
+    Un corte seco es un pico aislado. Un encadenado de medio segundo, a 5
+    muestras por segundo, son dos o tres pares seguidos por encima del umbral.
+    Contarlos sueltos multiplica los planos y divide su duración.
+    """
+    assert E._une_transiciones([]) == []
+    # tres cortes secos, separados
+    assert E._une_transiciones([4, 19, 33]) == [4, 19, 33]
+    # un encadenado de tres muestras seguidas -> un solo corte
+    assert len(E._une_transiciones([10, 11, 12])) == 1
+    # mezcla: seco, encadenado, seco
+    assert len(E._une_transiciones([3, 20, 21, 22, 40])) == 3
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_una_animatica_encadenada_no_duplica_los_planos(
+        tmp_path_factory):
+    """EL FALLO QUE ESTE TEST FIJA, MEDIDO DE VERDAD.
+
+    Una animática de TRES imágenes con encadenados salía con SEIS planos, y la
+    duración media de plano a la mitad de la real. Eso no se quedó en un
+    número feo: el bucle de autocorrección leyó «los planos duran poco,
+    SÚBELOS» y subió de 6 a 15,36 segundos por plano persiguiendo un objetivo
+    inalcanzable, porque el error estaba en el recuento y no en la duración.
+
+    Una medida mal hecha no da un informe peor: da un sistema que corrige en
+    la dirección equivocada con toda la autoridad de un dato.
+    """
+    d = tmp_path_factory.mktemp("encadenado")
+    imgs = []
+    for i, c in enumerate(("0x802020", "0x208020", "0x202080")):
+        p = d / f"i{i}.png"
+        r = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i",
+             f"color=c={c}:s=320x240,drawgrid=w=40:h=40:t=3:c=white@0.6",
+             "-frames:v", "1", str(p)], capture_output=True, timeout=60)
+        assert r.returncode == 0
+        imgs.append(p)
+
+    from vmagi.modules.studio.video import Slide, VideoSpec, render_slideshow
+    salida = d / "animatica.mp4"
+    obs = await render_slideshow(
+        VideoSpec(slides=[Slide(str(p), 3.0) for p in imgs],
+                  width=640, height=360, ken_burns=False, crossfade=0.5),
+        salida)
+    assert salida.exists(), obs.problems
+
+    m = await E.medir(salida, procedencia="generado")
+    assert m.planos == 3, (
+        f"tres imágenes encadenadas midieron {m.planos} planos. Cada "
+        f"transición gradual se está contando como varios cortes.")
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_bajar_el_contraste_no_borra_los_cortes(cuatro_planos,
+                                                      tmp_path_factory):
+    """Un corte es un cambio de CONTENIDO, no de EXPOSICIÓN.
+
+    EL ACOPLAMIENTO QUE ESTE TEST FIJA, ENCONTRADO EJECUTANDO EL SISTEMA.
+    En cuanto el bucle de autocorrección aprendió a etalonar para acercar la
+    paleta a la biblia, empezó a aplanar el contraste, y al aplanarlo los
+    histogramas de dos planos distintos se parecían lo bastante como para
+    caer por debajo del umbral: los cortes desaparecían.
+
+    Medido: el mismo montaje pasaba de 3 planos a 2, la duración media de
+    plano se disparaba de 5,7 s a 13,9 s, y el bucle se ponía a corregir la
+    duración por un cambio que había hecho él mismo en el color. Corregir un
+    eje rompía la medición de otro, y el sistema perseguía su propio reflejo.
+    """
+    d = tmp_path_factory.mktemp("etalonado")
+    plano = _ffmpeg(["-i", str(cuatro_planos),
+                     "-vf", "eq=contrast=0.42:brightness=-0.1:saturation=0.37"],
+                    d / "aplanado.mp4")
+
+    original = await E.medir(cuatro_planos, procedencia="obra")
+    grisaceo = await E.medir(plano, procedencia="generado")
+
+    assert original.planos == 4, original.planos
+    assert grisaceo.planos == original.planos, (
+        f"el mismo montaje con el contraste bajado midió "
+        f"{grisaceo.planos} planos en vez de {original.planos}. El detector "
+        f"de cortes está midiendo exposición, no contenido.")
+    # Y el contraste sí tiene que haber bajado: si no, el test no probó nada.
+    assert grisaceo.contraste < original.contraste * 0.75, (
+        f"el etalonaje no llegó a aplicarse ({grisaceo.contraste} vs "
+        f"{original.contraste}), así que este test no comprobó nada")
+
+
 @sin_ffmpeg
 @sin_numpy
 async def test_mide_el_aspecto_de_la_imagen_no_el_del_contenedor(
