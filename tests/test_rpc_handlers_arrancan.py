@@ -69,20 +69,13 @@ _BUSES_ABIERTOS: list[MagiBus] = []
 
 
 @pytest.fixture(autouse=True)
-def _cierra_los_buses():
-    """Síncrono a propósito: la fuga también la dejan los tests que NO son
-    asíncronos, y una fixture `async` solo se aplica a los que sí.
-
-    No se puede `await bus.shutdown()` desde aquí, así que se cancelan las
-    tareas directamente. Cancelar sin esperar basta para lo que se persigue:
-    una tarea cancelada ya no se destruye «pendiente», que es lo que hacía
-    aparecer el error en el teardown.
-    """
+def _limpia_buses_de_tests_sincronos():
+    """Los tests SÍNCRONOS no tienen bucle, así que sus buses no llegan a
+    crear tareas — pero sí dejan colas y trabajadores pendientes apuntados.
+    Se vacían aquí; las tareas de verdad las recoge la fixture de abajo."""
     yield
     for bus in _BUSES_ABIERTOS:
-        tareas = (list(getattr(bus, "_worker_tasks", []))
-                  + list(getattr(bus, "_sink_tasks", [])))
-        for t in tareas:
+        for t in list(getattr(bus, "_worker_tasks", [])):
             if not t.done():
                 t.cancel()
         try:
@@ -91,6 +84,43 @@ def _cierra_los_buses():
         except Exception:          # pragma: no cover
             pass                   # limpiar no puede hacer fallar un test
     _BUSES_ABIERTOS.clear()
+
+
+@pytest.fixture(autouse=True)
+async def _no_dejar_tareas_colgando():
+    """Guarda general: ninguna tarea creada por un test sobrevive al test.
+
+    POR QUÉ GENERAL Y NO UNA POR FUGA
+    =================================
+    El primer arreglo cancelaba los buses que registra `_kernel_handlers`, y
+    bajó los errores de teardown de 4 a 1. Al mirar QUÉ seguía colgando en vez
+    de suponerlo aparecieron dos cosas distintas:
+
+      · tres `MagiBus._worker()` de buses que otros tests construyen
+        directamente, sin pasar por `_kernel_handlers`;
+      · un `SwarmOrchestrator._orchestrate_loop()`, que arranca al invocar
+        uno de los handlers y no lo para nadie.
+
+    Perseguirlas de una en una arregla estas dos y deja abierta la tercera,
+    la que se añada mañana. Este fichero invoca **todos** los handlers
+    registrados a propósito —para eso existe—, así que cualquiera de ellos
+    puede arrancar trabajo de fondo. La responsabilidad de recogerlo es del
+    arnés, no de cada handler.
+
+    Se cancela lo que quede vivo y se espera a que muera. `gather` con
+    `return_exceptions=True` porque una `CancelledError` es lo esperado aquí,
+    no un fallo: si no se esperase, la tarea se destruiría igual «pendiente» y
+    el error de teardown seguiría saliendo.
+    """
+    antes = {t for t in asyncio.all_tasks()}
+    yield
+    pendientes = [t for t in asyncio.all_tasks()
+                  if t not in antes and t is not asyncio.current_task()
+                  and not t.done()]
+    for t in pendientes:
+        t.cancel()
+    if pendientes:
+        await asyncio.gather(*pendientes, return_exceptions=True)
 
 
 def test_el_kernel_registra_handlers():

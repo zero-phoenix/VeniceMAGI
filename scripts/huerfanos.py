@@ -99,12 +99,43 @@ ENTRADAS = {
 PREFIJOS_DE_ENTRADA = ("test_", "pytest_", "handle_", "hook_")
 
 
+def entornos_virtuales(raiz: Path) -> set[Path]:
+    """Entornos virtuales detectados POR ESTRUCTURA, no por nombre.
+
+    POR QUÉ NO BASTA CON LA LISTA DE NOMBRES
+    ========================================
+    `EXCLUIDOS` tenía `venv`, `env` y `.venv-lock`, y aun así se le escapó
+    `.venv` — que es el nombre que las instrucciones de instalación de este
+    mismo README mandan crear. Resultado medido: 87 huérfanos sin entorno
+    virtual y 78 con uno dentro del repo.
+
+    Añadir `.venv` a la lista arregla ESE caso. No arregla el mecanismo: la
+    lista sigue siendo nombres plausibles escritos a mano, y mañana alguien
+    creará `.venv310`, `venv-win`, `entorno` o lo que le apetezca, y el
+    trinquete volverá a medir mal en silencio y hacia abajo.
+
+    Un entorno virtual tiene una marca que no depende de cómo se llame: el
+    fichero `pyvenv.cfg` en su raíz, que lo pone `python -m venv` siempre y
+    que no aparece en ningún otro sitio. Se busca esa marca. La lista de
+    nombres se queda como red de seguridad barata para lo que no es un venv
+    —`node_modules`, `dist`, cachés—, no como la defensa principal.
+    """
+    encontrados: set[Path] = set()
+    for cfg in raiz.rglob("pyvenv.cfg"):
+        if cfg.is_file():
+            encontrados.add(cfg.parent.resolve())
+    return encontrados
+
+
 def _ficheros(raiz: Path, extensiones: set[str] | None = None) -> list[Path]:
+    venvs = entornos_virtuales(raiz)
     out = []
     for p in raiz.rglob("*"):
         if not p.is_file():
             continue
         if any(parte in EXCLUIDOS for parte in p.parts):
+            continue
+        if venvs and any(v in p.resolve().parents for v in venvs):
             continue
         if extensiones is not None and p.suffix not in extensiones:
             continue

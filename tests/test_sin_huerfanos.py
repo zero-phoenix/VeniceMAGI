@@ -196,6 +196,36 @@ def test_el_entorno_virtual_del_README_no_falsea_el_conteo():
     assert {".venv-lock", "venv", "site-packages"} <= h.EXCLUIDOS
 
 
+def test_un_entorno_virtual_se_detecta_aunque_se_llame_de_otra_forma(tmp_path):
+    """La defensa que NO depende de acertar el nombre.
+
+    Añadir `.venv` a la lista arregla el caso que se pagó. No arregla el
+    mecanismo: la lista son nombres plausibles escritos a mano, y mañana
+    alguien crea `.venv310`, `venv-win` o `entorno` y el trinquete vuelve a
+    medir mal en silencio y hacia abajo.
+
+    Un entorno virtual tiene una marca que no depende de cómo se llame:
+    `pyvenv.cfg` en su raíz, que lo pone `python -m venv` siempre y que no
+    aparece en ningún otro sitio. Se busca esa marca.
+    """
+    import scripts.huerfanos as h  # noqa: PLC0415
+
+    raro = tmp_path / "entorno-con-nombre-que-nadie-listaria"
+    (raro / "Lib" / "site-packages" / "loquesea").mkdir(parents=True)
+    (raro / "pyvenv.cfg").write_text("home = C:\\Python310\n", encoding="utf-8")
+    trampa = raro / "Lib" / "site-packages" / "loquesea" / "modulo.py"
+    trampa.write_text("def classify(): pass\n", encoding="utf-8")
+    (tmp_path / "real.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert raro.resolve() in h.entornos_virtuales(tmp_path)
+    vistos = h._ficheros(tmp_path, {".py"})
+    assert trampa.resolve() not in {v.resolve() for v in vistos}, (
+        "un fichero de dentro del entorno virtual entró en el índice de usos: "
+        "cualquier nombre que aparezca ahí pasará por 'conectado'")
+    assert (tmp_path / "real.py").resolve() in {v.resolve() for v in vistos}, (
+        "se llevó por delante ficheros que sí son del proyecto")
+
+
 def test_el_codigo_publico_sin_llamar_no_crece():
     n = _cuenta()
     assert n <= TECHO, (
