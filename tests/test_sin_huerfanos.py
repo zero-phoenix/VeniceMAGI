@@ -95,7 +95,21 @@ SCRIPT = RAIZ / "scripts" / "huerfanos.py"
 # El techo baja con el conteo. Si no bajara, el margen ganado se podría volver
 # a gastar sin que nadie se entere — que es la mitad del mecanismo que siempre
 # se olvida.
-TECHO = 88
+#
+# 87 desde el 2026-09-02, y el caso es instructivo. Entró un módulo nuevo
+# entero —`studio/estilo.py`, el medidor de estilo— y el conteo BAJÓ uno.
+#
+# La primera versión sí subía: traía sus propias `ffmpeg_disponible` y
+# `ffprobe_disponible`, que son exactamente las preguntas que `video.py` ya
+# respondía con `ffmpeg_available` y `ffprobe_available`. Tres huérfanos
+# nuevos y, peor que el conteo, dos funciones distintas para la misma
+# pregunta: el día que una mire el PATH y la otra intente ejecutar, dirán
+# cosas distintas sobre la misma máquina.
+#
+# Al reusar las de `video.py` desaparecen las dos copias Y se conecta
+# `ffprobe_available`, que llevaba tiempo definida sin que nadie la llamara.
+# El trinquete no cazó un descuido de estilo: cazó una duplicación.
+TECHO = 87
 
 #: techos por paquete (2026-08-16, tras archivar 6 paquetes sin importadores:
 #: device, fabrication, vision, reasoning, os_portable, capabilities -> _attic). El total puede
@@ -112,7 +126,11 @@ TECHO = 88
 #: enseñando exactamente para lo que existe: el total bajó, pero no bajó en
 #: todas partes. `venice` creció con `seedance_admitido`, que es la regla de
 #: versiones que sustituyó a dos comparaciones de cadenas.
-TECHOS_POR_PAQUETE = {"vmagi/modules": 63, "vmagi/core": 17,
+#: 2026-09-02: `vmagi/modules` baja de 63 a 62 con la entrada del medidor de
+#: estilo. Un módulo nuevo que hace bajar el desglose es justo lo que este
+#: mecanismo persigue: no basta con que lo añadido esté conectado, tiene que
+#: no duplicar lo que ya había.
+TECHOS_POR_PAQUETE = {"vmagi/modules": 62, "vmagi/core": 17,
                       "vmagi/venice": 6, "vmagi/repl": 2}
 
 

@@ -8,6 +8,7 @@ el prompt, espera y recoge — siempre DELEGANDO al hilo del navegador
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,6 +43,86 @@ class ChatResp:
     texto: str
     modelo: str
     ms: float
+    #: Caracteres que NO llegaron al proveedor porque el prompt excedía el
+    #: límite. Cero es la respuesta normal. Distinto de cero significa que
+    #: el modelo contestó sobre un encargo incompleto, y quien lea la
+    #: respuesta tiene derecho a saberlo antes de creérsela.
+    recortado: int = 0
+
+
+#: Tope de caracteres que se le manda de una vez a un sitio guest. No es una
+#: cifra teórica: por encima de esto la caja de texto de la web se atraganta.
+LIMITE_PROMPT = 7000
+
+#: Cuánto del final se conserva cuando hay que recortar. El final es donde
+#: viven las restricciones y la evidencia; la cabecera suele ser rol y estilo,
+#: que el modelo puede inferir. Si hay que perder algo, que sea de en medio.
+COLA_PROMPT = 2200
+
+
+def recorta_prompt(texto: str, limite: int = LIMITE_PROMPT,
+                   cola: int = COLA_PROMPT) -> tuple[str, int]:
+    """Ajusta un prompt al límite del sitio guest SIN decapitarlo en silencio.
+
+    EL FALLO QUE ESTO CIERRA
+    ========================
+    La línea era `prompt = f"{sistema}\\n\\n---\\n\\n{usuario}"[:7000]`. Un
+    corte por el final, sin aviso, sin registro y sin que nadie se enterase.
+    Ya figura en `docs/AUTOMODELO.json` como afirmación **refutada**: «El
+    prompt llega entero al proveedor guest».
+
+    Lo que se perdía no era relleno. En este sistema, lo que viaja al final
+    de un prompt es justo lo que más pesa: la evidencia que Balthasar usa
+    para refutar, la lista de promesas incumplidas del reintento dirigido
+    del taller, y —en cuanto haya biblia de estilo— las restricciones de
+    dirección artística. El nodo contestaba sobre medio encargo creyendo
+    que lo tenía entero, y la respuesta salía coherente consigo misma, que
+    es exactamente el modo de fallo que no se ve.
+
+    Tres cambios sobre el `[:7000]`:
+
+    1. **Se conserva la cola.** Cabeza y final; lo que se sacrifica es el
+       centro, que es donde suele estar el desarrollo redundante.
+    2. **Se dice, dentro del propio prompt.** El modelo lee un marcador
+       explícito de cuánto falta. Un texto fundido sin costuras esconde
+       justo el trozo que falló — la misma regla que ya aplican los
+       subagentes.
+    3. **Se devuelve el número.** El llamador lo propaga en `ChatResp` y
+       queda en la traza. «No he podido comprobarlo» no es «está bien».
+    """
+    n = len(texto)
+    if n <= limite:
+        return texto, 0
+
+    cola = max(0, min(cola, limite // 2))
+
+    def _marca(perdidos: int) -> str:
+        return (f"\n\n[... RECORTADO: {perdidos} caracteres del centro no "
+                f"caben en el límite de {limite} de este proveedor. Responde "
+                f"solo con lo que sí tienes y di qué te falta. ...]\n\n")
+
+    # EL FALLO QUE ESTA CUENTA CIERRA, y lo cazó su propio test.
+    #
+    # El primer intento descontaba del presupuesto un marcador de ejemplo
+    # («[... RECORTADO: 0 caracteres del centro ...]», 48 caracteres) y luego
+    # insertaba el de verdad, que con la frase entera pasa de 160. Resultado
+    # medido: con 7001 caracteres de entrada salían 7096, es decir, la función
+    # que existe para respetar el tope lo rebasaba — y lo rebasaba justo por
+    # el texto que avisa de que no lo rebasa.
+    #
+    # Se descuenta el marcador CON el número más ancho posible, que es el de
+    # perder el texto entero. El real solo puede tener los mismos dígitos o
+    # menos, así que el resultado nunca crece por encima de lo presupuestado.
+    reserva = len(_marca(n))
+    hueco = limite - cola - reserva
+    if hueco <= 0:
+        # Límite tan pequeño que no cabe ni el aviso: se corta y se dice.
+        return texto[:limite], n - limite
+
+    cabeza = texto[:hueco]
+    final = texto[n - cola:] if cola else ""
+    perdidos = n - len(cabeza) - len(final)
+    return cabeza + _marca(perdidos) + final, perdidos
 
 
 def _traduce_cierre(fn):
@@ -180,7 +261,11 @@ class Venice:
                             ms=(time.monotonic() - t0) * 1000)
 
         p = await self._abrir()
-        prompt = f"{sistema}\n\n---\n\n{usuario}"[:7000]
+        prompt, recortado = recorta_prompt(f"{sistema}\n\n---\n\n{usuario}")
+        if recortado:
+            logging.getLogger(__name__).warning(
+                "[%s] prompt recortado: %d caracteres del centro no viajaron",
+                self.sitio.nombre, recortado)
         # La sesión Guest caduca y el modal de login puede saltar EN CUALQUIER
         # momento (medido): se reintenta reentrando como Guest, no pidiendo
         # credenciales que no existen.
@@ -197,7 +282,8 @@ class Venice:
                 self.racion.apunta_llamada()
                 return ChatResp(texto=respuesta,
                                 modelo=f"{self.sitio.nombre}-guest",
-                                ms=(time.monotonic() - t0) * 1000)
+                                ms=(time.monotonic() - t0) * 1000,
+                                recortado=recortado)
             except sesion.ModalDeLogin as e:
                 ultimo = e
         # Medido: reentrar como Guest nuevo NO recupera cupo — la ración

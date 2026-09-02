@@ -66,8 +66,8 @@
   "texto": "El video generativo funciona en modo cloud",
   "prueba": "video_guest",
   "estado": "refutada",
-  "ultima": "2026-08-30 22:00",
-  "evidencia": "Ningun proveedor guest declara video. Seedance 2.5+ exige VENICE_API_KEY, que esta fuera del camino principal por diseno.",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "Ningun proveedor guest declara video. Seedance 2.5+ exige key: confirmado el 2026-09-02 tambien fuera de Venice -Together AI, BytePlus ModelArk, Atlas Cloud, Muapi y VideoGenAPI sirven Seedance 2.5 y todos piden key. Los pesos no se han publicado nunca, asi que tampoco hay via local. Y medido con nvidia-smi en el equipo del usuario: GTX 1050 con 2048 MiB, cuando Wan 2.2 1.3B, HunyuanVideo 1.5 1.3B y LTX-Video piden 8 GB en su variante minima. No hay camino, ni de nube sin key ni local.",
   "veces_ok": 0,
   "veces_mal": 1
  },
@@ -75,8 +75,8 @@
   "texto": "El prompt llega entero al proveedor guest",
   "prueba": "prompt_sin_decapitar",
   "estado": "refutada",
-  "ultima": "2026-08-31 11:00",
-  "evidencia": "cliente.py corta en 7000 caracteres sin avisar. Lo que viaje al final -la evidencia de Balthasar- se pierde y el nodo contesta sobre medio encargo creyendo que lo tiene entero.",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "SIGUE REFUTADA: por encima de 7000 caracteres el prompt no llega entero, y eso no lo arregla el codigo, lo impone la caja de texto del sitio guest. Lo que cambia el 2026-09-02 es que deja de ser SILENCIOSO: recorta_prompt() conserva cabeza y cola, sacrifica el centro, escribe dentro del propio prompt cuantos caracteres faltan, y devuelve el numero en ChatResp.recortado. El final -evidencia de Balthasar, promesas incumplidas del taller, restricciones de la biblia de estilo- ya no se pierde.",
   "veces_ok": 0,
   "veces_mal": 1
  },
@@ -95,6 +95,33 @@
   "estado": "sin_comprobar",
   "ultima": "",
   "evidencia": "Portado de MAGI v5.16.0 con sus tests. Alli figuraba tambien como SIN COMPROBAR contra un juego real; el port no cambia eso.",
+  "veces_ok": 0,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El sistema mide la direccion artistica de un video con una maquina, y distingue camara fija de panoramica",
+  "prueba": "medidor_de_estilo",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "vmagi/modules/studio/estilo.py, 37 tests en tests/test_estilo_medidor.py contra material fabricado con FFmpeg cuya verdad se conoce por construccion. La prueba que lo tumbaria es no separar dos videos que AMBOS tienen movimiento: uno con la camara clavada y un objeto cruzando el cuadro, otro que es panoramica pura. Contando pixeles que cambian -lo que hace observe_video- los dos dan lo mismo. Medido: camara fija 0.00 px, panoramica muy por encima del umbral. Tambien cuenta 4 planos en un video fabricado con 4, y lee 1.778 de aspecto en un 16:9 metido dentro de un contenedor 4:3 con barras, donde ffprobe dice 1.333.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El enjambre puede invocar el medidor de estilo por si mismo",
+  "prueba": "estilo_alcanzable_desde_el_enjambre",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "Tres herramientas registradas en register_studio_tools: medir_estilo, biblia_de_estilo y juzgar_estilo. Anadidas a WIRING en tests/test_wiring.py, que exige que se invoquen desde vmagi/modules/studio/tools.py. El bucle completo -referencia, biblia, juicio de una panoramica con lista de correccion- pasa de punta a punta sin ningun modelo por medio. Es la regla 3: una capacidad que solo puede llamar quien supervisa desde fuera no acerca al sistema a ser autonomo ni un paso.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El critico del taller puede juzgar lo que se ve en un VIDEO",
+  "prueba": "critico_con_vision_de_video",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "El medidor ya mide aspecto real, cortes, movimiento de camara, paleta y audio sin ningun modelo. Lo que sigue sin poder juzgarse es lo que exige reconocer CONTENIDO: escala de plano (hace falta detector de rostros), continuidad de identidad entre planos (hace falta embedding facial) y solapamiento de dialogo (hace falta diarizacion). Los tres estan declarados en no_medido, que es la respuesta correcta y no la deseable. El cascaron local con CLIP los desbloquea; hasta que exista, esto no se ha comprobado.",
   "veces_ok": 0,
   "veces_mal": 0
  }

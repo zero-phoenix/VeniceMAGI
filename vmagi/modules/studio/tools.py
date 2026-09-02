@@ -309,4 +309,149 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
                           error=None if obs.ok else "; ".join(obs.problems),
                           meta={"path": str(destino)})
 
+    # ------------------------------------------------- ojos y oídos de estilo
+    #
+    # POR QUÉ ESTAS TRES ENTRAN AL REGISTRO Y NO SE QUEDAN EN `estilo.py`
+    # ===================================================================
+    # Regla 3 del proyecto: cada capacidad tiene que poder invocarse desde la
+    # interfaz. Un medidor que solo puedo llamar yo desde fuera no le sirve de
+    # nada al enjambre — y el objetivo declarado es que el sistema haga sin
+    # supervisión lo mismo que se hace supervisándolo.
+    #
+    # Son tres y no una porque el bucle tiene tres momentos distintos: medir
+    # la referencia, congelarla en biblia, y juzgar cada corte contra ella.
+    # Fundirlas obligaría a volver a medir la referencia en cada juicio, que
+    # es lento y —peor— permitiría que la vara de medir cambiara entre
+    # comparaciones.
+
+    @reg.tool("medir_estilo",
+              "Mide la dirección artística de un vídeo con una máquina, no "
+              "con una opinión: relación de aspecto real de la imagen, "
+              "cortes y duración media de plano, si la cámara se mueve o "
+              "está clavada, paleta, y del audio la envolvente, el silencio "
+              "y la banda de voz. Declara explícitamente lo que NO ha "
+              "podido medir.",
+              {"type": "object", "properties": {
+                  "path": {"type": "string"},
+                  "procedencia": {
+                      "type": "string", "enum": ["obra", "trailer", "generado"],
+                      "description": "de un tráiler no vale la duración de "
+                                     "plano: la corta el montador del tráiler"}},
+               "required": ["path"]}, access={"read", "exec"})
+    async def medir_estilo(path: str, ctx=None, procedencia: str = "obra"):
+        from .estilo import medir
+        p = ctx.resolve(path) if ctx else Path(path)
+        m = await medir(p, procedencia=procedencia)
+        lineas = [m.render()]
+        lineas += [f"  · {e}" for e in m.evidencia]
+        if m.no_medido:
+            lineas.append("SIN MEDIR (no es lo mismo que correcto):")
+            lineas += [f"  · {s}" for s in m.no_medido]
+        # `ok` es «se midió algo», no «el vídeo está bien». Un vídeo horrible
+        # se mide perfectamente; el juicio es de `juzgar_estilo`.
+        hubo = m.aspecto is not None or m.tiene_audio
+        return ToolResult(hubo, "\n".join(lineas),
+                          error=None if hubo else "; ".join(m.no_medido),
+                          meta={"medida": m.to_dict()})
+
+    @reg.tool("biblia_de_estilo",
+              "Convierte la medida de un vídeo de REFERENCIA en la biblia de "
+              "estilo del encargo y la guarda en JSON. Los números salen del "
+              "fichero, no de la opinión de nadie.",
+              {"type": "object", "properties": {
+                  "referencia": {"type": "string"},
+                  "out_path": {"type": "string"},
+                  "nombre": {"type": "string"},
+                  "procedencia": {"type": "string",
+                                  "enum": ["obra", "trailer", "generado"]},
+                  "holgura": {"type": "number",
+                              "description": "desvío admitido, en fracción "
+                                             "del propio valor (0.15 = 15%)"}},
+               "required": ["referencia", "out_path"]},
+              access={"read", "write", "exec"}, dangerous=True)
+    async def biblia_de_estilo(referencia: str, out_path: str, ctx=None,
+                               nombre: str = "referencia",
+                               procedencia: str = "obra",
+                               holgura: float = 0.15):
+        from .estilo import BibliaDeEstilo, medir
+        origen = ctx.resolve(referencia) if ctx else Path(referencia)
+        destino = ctx.resolve(out_path) if ctx else Path(out_path)
+        m = await medir(origen, procedencia=procedencia)
+        if m.aspecto is None:
+            return ToolResult(
+                False, "no se pudo medir la referencia",
+                error="; ".join(m.no_medido) or "sin medidas visuales")
+        b = BibliaDeEstilo.desde(m, nombre=nombre, holgura=float(holgura))
+        if ctx and getattr(ctx, "journal", None):
+            ctx.journal.record(destino, "create", tool="biblia_de_estilo")
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(b.to_json(), encoding="utf-8", newline="\n")
+        ejes = ", ".join(f"{t.eje}={t.objetivo:.4g}±{t.margen:.3g}"
+                         for t in b.tolerancias)
+        aviso = ""
+        if procedencia == "trailer":
+            aviso = ("\nNOTA: procedencia tráiler. La duración de plano y las "
+                     "medidas de mezcla NO entran: las decide el montador del "
+                     "tráiler, no el director.")
+        return ToolResult(
+            True,
+            f"biblia '{nombre}' con {len(b.tolerancias)} ejes -> {destino}\n"
+            f"{ejes}{aviso}",
+            meta={"path": str(destino), "ejes": len(b.tolerancias)})
+
+    @reg.tool("juzgar_estilo",
+              "Mide un vídeo generado y lo enfrenta a una biblia de estilo "
+              "guardada. Devuelve qué ejes cumplen, cuáles no y en qué "
+              "dirección hay que corregir. Un eje que no se pudo medir NO "
+              "aprueba por omisión.",
+              {"type": "object", "properties": {
+                  "path": {"type": "string"},
+                  "biblia": {"type": "string"}},
+               "required": ["path", "biblia"]}, access={"read", "exec"})
+    async def juzgar_estilo(path: str, biblia: str, ctx=None):
+        from .estilo import BibliaDeEstilo, Desvio, Tolerancia, compara, medir
+        p = ctx.resolve(path) if ctx else Path(path)
+        bp = ctx.resolve(biblia) if ctx else Path(biblia)
+        if not bp.exists():
+            return ToolResult(False, "", error=f"no existe la biblia {bp}")
+        try:
+            crudo = json.loads(bp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            return ToolResult(False, "", error=f"biblia ilegible: {e}")
+        b = BibliaDeEstilo(
+            nombre=crudo.get("nombre", ""), origen=crudo.get("origen", ""),
+            procedencia=crudo.get("procedencia", "desconocida"),
+            tolerancias=[Tolerancia(**t) for t in crudo.get("tolerancias", [])])
+        m = await medir(p, procedencia="generado")
+        v = compara(m, b)
+        cuerpo = [v.render()]
+
+        # Los ejes que fallan por MUCHO se sacan aparte. Una lista plana de
+        # incumplimientos trata igual «el aspecto se pasó un 2%» que «la
+        # cámara se mueve seis veces más de lo permitido», y la siguiente
+        # pasada se gasta arreglando lo barato mientras lo grave sigue igual.
+        def _gravedad(d: Desvio) -> float:
+            if d.obtenido is None or not d.margen:
+                return float("inf")
+            return abs(d.obtenido - d.objetivo) / d.margen
+
+        graves = sorted(v.incumplidos, key=_gravedad, reverse=True)[:3]
+        if not v.aprueba:
+            if graves:
+                cuerpo.append("\nLO MÁS GRAVE PRIMERO:")
+                cuerpo += [
+                    f"  · {d.eje}: se pasa {_gravedad(d):.1f}x del margen"
+                    for d in graves]
+            cuerpo.append("\nQUÉ CORREGIR EN LA SIGUIENTE PASADA:")
+            cuerpo += [f"  - {f}" for f in v.lista_para_reintento()]
+            cuerpo += [f"  - sin juzgar: {s}" for s in v.sin_juzgar]
+        return ToolResult(
+            v.aprueba, "\n".join(cuerpo),
+            error=None if v.aprueba else
+            f"{len(v.incumplidos)} ejes incumplidos, "
+            f"{len(v.sin_juzgar)} sin juzgar",
+            meta={"aprueba": v.aprueba,
+                  "incumplidos": [d.eje for d in v.incumplidos],
+                  "reintento": v.lista_para_reintento()})
+
     return reg

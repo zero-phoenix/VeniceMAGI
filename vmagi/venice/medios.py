@@ -18,7 +18,47 @@ class BackendImagenError(RuntimeError):
 
 
 class VideoSeedanceError(RuntimeError):
-    """Error de generación de vídeo con Seedance."""
+    """Error de generación de vídeo con Seedance.
+
+    EL FALLO QUE ESTO CIERRA
+    ========================
+    La clase heredaba de `RuntimeError` sin `__init__` propio, y el único
+    sitio que la construye con contexto lo hacía así:
+
+        raise VideoSeedanceError(f"Seedance error {r.status_code}: ...",
+                                 estado=r.status_code)
+
+    `RuntimeError` no acepta argumentos con nombre. Verificado ejecutándolo:
+    `TypeError: VideoSeedanceError() takes no keyword arguments`. Es decir,
+    la rama que informa de un error HTTP de Seedance **lanzaba un TypeError
+    en lugar del error de Seedance**, y el mensaje que llegaba al usuario no
+    mencionaba ni el código ni el motivo. Un 429 —cuota agotada, el fallo más
+    probable de todos— se presentaba como un error de tipos sin relación.
+
+    Ni un solo test tocaba esta rama, en una suite de más de 1500. Es el
+    caso exacto de la regla 2 del proyecto: un test sobre una pieza aislada
+    no prueba que el sistema la use.
+
+    `estado` es opcional a propósito: las otras tres construcciones de esta
+    excepción (falta de key, modelo no permitido, respuesta sin URL) no son
+    fallos HTTP y no tienen código que declarar. `None` significa «esto no
+    vino de una respuesta HTTP», que es distinto de «vino con código 0».
+    """
+
+    def __init__(self, mensaje: str, *, estado: int | None = None):
+        super().__init__(mensaje)
+        self.estado = estado
+
+    @property
+    def es_cuota(self) -> bool:
+        """¿El proveedor dijo que no queda cuota, en vez de que algo falló?
+
+        Se separa porque el llamador tiene que reaccionar distinto: ante una
+        cuota agotada se espera o se cambia de proveedor; ante un 401 se
+        revisa la key; ante un 5xx se reintenta. Sin el código, las tres
+        eran el mismo texto opaco.
+        """
+        return self.estado in (402, 429)
 
 
 #: Version minima de Seedance. El vídeo del sistema es SOLO Seedance 2.5+.

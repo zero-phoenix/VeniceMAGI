@@ -196,6 +196,14 @@ WIRING = [
     ("dcf_sensitivity",        "vmagi/modules/world/tools.py",       "§6.3 DCF con sensibilidad"),
     ("quality_checklist",      "vmagi/modules/world/tools.py",       "§6.3 rúbrica de calidad"),
     ("ThesisLog",              "vmagi/modules/world/tools.py",       "§6.3 registro de tesis calibrado"),
+    # §5.6 — el medidor de estilo. Va aquí y no como módulo suelto porque la
+    # regla 3 dice que cada capacidad tiene que poder invocarse desde la
+    # interfaz: un instrumento que solo se puede llamar desde fuera no le
+    # sirve al enjambre, y el objetivo es que el sistema haga sin supervisión
+    # lo mismo que se hace supervisándolo.
+    ("medir",                  "vmagi/modules/studio/tools.py",      "§5.6 el enjambre mide el estilo de un vídeo"),
+    ("BibliaDeEstilo",         "vmagi/modules/studio/tools.py",      "§5.6 la referencia se congela en biblia"),
+    ("compara",                "vmagi/modules/studio/tools.py",      "§5.6 el corte se juzga contra la biblia"),
 ]
 
 
