@@ -204,6 +204,12 @@ WIRING = [
     ("medir",                  "vmagi/modules/studio/tools.py",      "§5.6 el enjambre mide el estilo de un vídeo"),
     ("BibliaDeEstilo",         "vmagi/modules/studio/tools.py",      "§5.6 la referencia se congela en biblia"),
     ("compara",                "vmagi/modules/studio/tools.py",      "§5.6 el corte se juzga contra la biblia"),
+    ("informe_cascaron",       "vmagi/modules/studio/tools.py",      "§5.7 el enjambre sabe qué percibe su maquina"),
+    ("detecta_rostros",        "vmagi/modules/studio/estilo.py",     "§5.7 escala de plano desde el cascaron local"),
+    ("rueda_hasta_cumplir",    "vmagi/modules/studio/tools.py",      "§5.8 bucle de autocorreccion invocable"),
+    ("AutoCorrectionLoop",     "vmagi/modules/studio/bucle.py",      "§5.8 el bucle del plan, con medicion real detras"),
+    ("RightsGate",             "vmagi/modules/studio/bucle.py",      "§5.8 derechos comprobados ANTES de generar"),
+    ("MediaSpec",              "vmagi/modules/studio/bucle.py",      "§5.8 el encargo se vuelve criterios duros"),
 ]
 
 
@@ -564,8 +570,13 @@ KNOWN_ORPHANS = {
     "vmagi.modules.route.providers", "vmagi.modules.route.providers.base",
     "vmagi.modules.route.providers.claude_cli",
     "vmagi.modules.route.providers.cloud_api",
-    "vmagi.modules.studio.loop", "vmagi.modules.studio.rights",
-    "vmagi.modules.studio.spec",
+    # 2026-09-02: salen `studio.loop`, `studio.rights` y `studio.spec`. Eran
+    # tres módulos completos —motor de convergencia con meseta, contrato de
+    # criterios medibles y control de derechos— que llevaban aquí desde su
+    # creación, y el propio docstring de `loop.py` confesaba que su función de
+    # medida «es un mock de Measure() determinista». `studio/bucle.py` es el
+    # cable: los une al medidor de estilo, y la convergencia pasa a salir de
+    # medir un fichero. La lista encoge, que es su única dirección permitida.
 }
 
 

@@ -64,8 +64,19 @@ PAQUETE = RAIZ / "vmagi"
 #: nombres comunes encontrados ahí contaban como "uso" y bajaban el conteo
 #: sin que nadie hubiera conectado nada. Un rinquete que mide distinto según
 #: dónde corre no es un rinquete.
+#: 2026-09-02: faltaba `.venv`, y es el caso más probable de todos.
+#: MEDIDO: mismo commit, mismo código, dos máquinas —87 huérfanos sin venv,
+#: 78 con un `.venv` recién creado dentro del repo. Nueve piezas «conectadas»
+#: por nombres que aparecían dentro de site-packages.
+#: Lo grave no es el número: es que la instrucción de instalación del propio
+#: README dice literalmente `python -m venv .venv`. O sea que seguir las
+#: instrucciones del proyecto rompía el trinquete del proyecto, y lo rompía
+#: hacia abajo — que es la dirección que no avisa, porque un conteo que baja
+#: parece una mejora. La lista tenía `venv` y `.venv-lock`; el nombre que el
+#: README manda crear era justo el que no estaba.
 EXCLUIDOS = {"_attic", "__pycache__", "node_modules", ".git", "dist", "build",
-             ".venv-lock", "venv", "env", "release", "journal", "scratch",
+             ".venv", ".venv-lock", "venv", "env", ".env", "site-packages",
+             ".tox", "release", "journal", "scratch",
              "generated_media", "htmlcov", ".pytest_cache", ".ruff_cache",
              ".idea", ".vscode"}
 

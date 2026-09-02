@@ -121,8 +121,26 @@
   "prueba": "critico_con_vision_de_video",
   "estado": "sin_comprobar",
   "ultima": "",
-  "evidencia": "El medidor ya mide aspecto real, cortes, movimiento de camara, paleta y audio sin ningun modelo. Lo que sigue sin poder juzgarse es lo que exige reconocer CONTENIDO: escala de plano (hace falta detector de rostros), continuidad de identidad entre planos (hace falta embedding facial) y solapamiento de dialogo (hace falta diarizacion). Los tres estan declarados en no_medido, que es la respuesta correcta y no la deseable. El cascaron local con CLIP los desbloquea; hasta que exista, esto no se ha comprobado.",
+  "evidencia": "PARCIALMENTE RESUELTA el 2026-09-02. El ritmo del dialogo ya se mide sin ningun modelo: turnos por minuto, duracion media de turno, pausa media y pausa MAXIMA aparte de la media, porque un silencio de tres segundos en mitad de una conversacion es una decision de direccion y promediarlo lo borra. Verificado contra audio fabricado con cadencia conocida. Lo que sigue sin comprobarse es la parte que exige reconocer contenido: que el detector de rostros encuentre caras REALES (la aritmetica de la escala de plano si esta probada, el detector no se ha corrido contra material real porque falta el modelo), la continuidad de identidad entre planos, y QUIEN habla en cada turno.",
   "veces_ok": 0,
   "veces_mal": 0
+ },
+ {
+  "texto": "El bucle de autocorreccion mide ficheros de verdad, no un mock",
+  "prueba": "bucle_con_medicion_real",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "vmagi/modules/studio/bucle.py cablea loop.py, spec.py y rights.py -tres modulos que el trinquete de huerfanos senalaba desde su creacion, y cuyo propio docstring confesaba que la funcion de medida 'es un mock'- al medidor de estilo. 11 tests: converge sobre un fichero que cumple, corta por meseta antes de gastar las cuatro pasadas cuando no mejora, y pasa la lista concreta de ejes incumplidos a la siguiente pasada en vez de un 'hazlo mejor'. Los derechos se comprueban ANTES de generar: comprobar despues es comprobar cuando la racion diaria ya esta gastada.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "El trinquete de huerfanos mide lo mismo en cualquier maquina",
+  "prueba": "huerfanos_sin_falsear",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA el mismo dia. EXCLUIDOS tenia 'venv' y '.venv-lock' pero no '.venv', que es literalmente el nombre que las instrucciones de instalacion del README mandan crear. Medido: mismo commit, 87 huerfanos sin entorno virtual y 78 con un .venv dentro del repo. Nueve piezas pasaban por conectadas porque su nombre aparecia en site-packages. Y lo rompia HACIA ABAJO, que es la direccion que no avisa: un conteo que baja parece una mejora, y el test que obliga a bajar el techo habria invitado a consolidar como logro un margen inexistente. El comentario de 2026-08-16 ya contaba que este mismo problema se pago una vez con site-packages.",
+  "veces_ok": 1,
+  "veces_mal": 1
  }
 ]

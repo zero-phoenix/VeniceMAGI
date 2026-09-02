@@ -298,7 +298,7 @@ set SEEDANCE_MODEL=seedance-2.5-text-to-video
 
 ## Qué sabe hacer
 
-El enjambre tiene **61 herramientas** reales sobre tu máquina, repartidas por
+El enjambre tiene **66 herramientas** reales sobre tu máquina, repartidas por
 rol y acotadas por dominio antes de entrar al prompt.
 
 * **Ingeniería de software**: crear, modificar y ejecutar código, empaquetar a
@@ -368,8 +368,31 @@ python -m venv .venv
 
 Opcionales, detectados si están: `capstone` y `unicorn` (ingeniería inversa),
 `pygame` y `pillow` (**sin Pillow el taller de arte no aprueba nada**, lo
-declara como no verificado), `ffmpeg` (vídeo), ComfyUI en `127.0.0.1:8188`.
+declara como no verificado), `ffmpeg` (vídeo y **medidor de estilo**),
+`opencv-python-headless` (**escala de plano**), ComfyUI en `127.0.0.1:8188`.
 Sin ellos el sistema funciona y **avisa de lo que no puede hacer**.
+
+### El cascarón local
+
+Lo único que corre en tu tarjeta, y es a propósito lo más pequeño posible. No
+genera: **percibe**. Hace lo que ningún proveedor guest puede hacer, porque
+ninguno acepta imágenes de entrada.
+
+```
+opencv-python-headless          escala de plano                 pip install
+face_detection_yunet (230 KB)   detector                        opencv_zoo
+face_recognition_sface (37 MB)  continuidad de personaje        opencv_zoo
+```
+
+Los dos modelos van en `%LOCALAPPDATA%\VeniceMAGI\modelos`. `cascaron_estado`
+dice cuáles faltan, cuánto pesan y de dónde salen. **No se descargan solos**:
+bajar ficheros sin que nadie lo haya pedido rompería la promesa de una sola
+salida de red.
+
+Sin ellos, la escala de plano sale como **SIN MEDIR** — que no es lo mismo que
+«plano general», y confundir las dos cosas aprobaría un corte de primeros
+planos contra una biblia de planos generales sin que nadie hubiera mirado una
+sola imagen.
 
 ---
 

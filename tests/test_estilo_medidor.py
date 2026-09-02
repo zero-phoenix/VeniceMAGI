@@ -222,6 +222,107 @@ async def test_mide_silencio_y_banda_de_voz(tmp_path_factory):
         f"{m.fraccion_banda_voz:.0%}")
 
 
+def _con_audio(expr: str, dur: float, destino: Path) -> Path:
+    """Vídeo mudo con un tono al que se le enciende y apaga el volumen.
+
+    La cadencia queda fijada por la expresión, así que el número de turnos y
+    la longitud de cada pausa se conocen de antemano — que es lo único que
+    permite decir si el medidor acertó, y no solo si devolvió algo.
+    """
+    return _ffmpeg(
+        ["-f", "lavfi", "-i", f"color=c=gray:s=160x120:d={dur}:r=25",
+         "-f", "lavfi", "-i",
+         f"sine=frequency=700:duration={dur}:sample_rate=16000,"
+         f"volume='{expr}':eval=frame",
+         "-shortest", "-c:a", "aac"],
+        destino)
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_cuenta_los_turnos_de_dialogo_que_hay(tmp_path_factory):
+    """Seis turnos de 1 s separados por pausas de 0,5 s. Se sabe la respuesta.
+
+    Es la medida que sustituye a la diarización sin fingir que lo es: no dice
+    quién habla, dice a qué ritmo se habla. Para una dirección donde lo
+    importante es lo que no se dice, esa es la cifra que gobierna.
+    """
+    d = tmp_path_factory.mktemp("turnos")
+    v = _con_audio("if(lt(mod(t,1.5),1.0),1,0)", 9.0, d / "ritmo.mp4")
+    m = await E.medir(v, procedencia="obra")
+
+    assert m.turnos_por_minuto is not None, m.no_medido
+    # 6 turnos en 9 s = 40 por minuto.
+    assert 33 <= m.turnos_por_minuto <= 47, (
+        f"6 turnos en 9 s son 40/min y midió {m.turnos_por_minuto}")
+    assert m.duracion_media_turno == pytest.approx(1.0, abs=0.18)
+    assert m.pausa_media == pytest.approx(0.5, abs=0.15)
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_la_pausa_larga_no_se_diluye_en_la_media(tmp_path_factory):
+    """Tres turnos, una pausa de 0,4 s y otra de 3 s.
+
+    POR QUÉ VAN SEPARADAS `pausa_media` Y `pausa_maxima`. Un silencio de tres
+    segundos en mitad de una conversación es una decisión de dirección. La
+    media lo entierra: 1,7 s no se parece ni a 0,4 ni a 3, y describe una
+    escena que no existe.
+    """
+    d = tmp_path_factory.mktemp("pausa")
+    v = _con_audio(
+        "if(lt(t,1),1,if(between(t,1.4,2.4),1,if(between(t,5.4,6.4),1,0)))",
+        7.0, d / "pausa.mp4")
+    m = await E.medir(v, procedencia="obra")
+
+    assert m.pausa_maxima is not None, m.no_medido
+    assert m.pausa_maxima == pytest.approx(3.0, abs=0.3), m.pausa_maxima
+    assert m.pausa_media == pytest.approx(1.7, abs=0.35), m.pausa_media
+    assert m.pausa_maxima > m.pausa_media * 1.4, (
+        "la pausa larga quedó diluida: el eje no distingue una decisión de "
+        "dirección de un hueco corriente")
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_la_respiracion_dentro_de_una_frase_no_cuenta_como_turno(
+        tmp_path_factory):
+    """Cuatro bloques de sonido separados por huecos de 0,15 s: UNA réplica.
+
+    Sin coser los huecos cortos, cada respiración partiría el turno y la
+    cadencia medida sería la de las sílabas, no la de la conversación. Es el
+    modo de fallo obvio de contar tramos de energía a pelo, y por eso hay un
+    test que lo fija.
+    """
+    d = tmp_path_factory.mktemp("respira")
+    v = _con_audio("if(lt(mod(t,1.15),1.0),1,0)", 4.6, d / "respira.mp4")
+    m = await E.medir(v, procedencia="obra")
+
+    assert m.turnos_por_minuto is not None, m.no_medido
+    turnos = m.turnos_por_minuto * (4.6 / 60.0)
+    assert turnos <= 2.4, (
+        f"cosió mal: {turnos:.1f} turnos donde hay una sola réplica con "
+        f"respiraciones de 0,15 s")
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_el_ritmo_de_un_trailer_no_entra_en_la_biblia(tmp_path_factory):
+    """Un tráiler corta el diálogo en frases sueltas con música encima.
+
+    Su cadencia es la del departamento de marketing. Si entrara en la biblia,
+    el sistema perseguiría ese ritmo creyendo que persigue el del director.
+    """
+    d = tmp_path_factory.mktemp("trailer_ritmo")
+    v = _con_audio("if(lt(mod(t,1.5),1.0),1,0)", 9.0, d / "tr.mp4")
+    m = await E.medir(v, procedencia="trailer")
+    assert m.turnos_por_minuto is not None, "medirlo sí; usarlo de objetivo no"
+
+    ejes = {t.eje for t in E.BibliaDeEstilo.desde(m).tolerancias}
+    assert not ({"turnos_por_minuto", "duracion_media_turno", "pausa_media"}
+                & ejes), f"el ritmo del tráiler se coló en la biblia: {ejes}"
+
+
 @sin_ffmpeg
 async def test_sin_pista_de_audio_lo_dice_y_no_inventa(tmp_path_factory):
     d = tmp_path_factory.mktemp("estilo_mudo")

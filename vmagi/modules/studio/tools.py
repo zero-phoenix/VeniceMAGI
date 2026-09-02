@@ -354,6 +354,107 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
                           error=None if hubo else "; ".join(m.no_medido),
                           meta={"medida": m.to_dict()})
 
+    @reg.tool("animatica_hasta_cumplir",
+              "Monta una animática con las imágenes dadas, la MIDE contra una "
+              "biblia de estilo y la vuelve a montar corrigiendo lo que falló, "
+              "hasta que cumpla o hasta que deje de mejorar. Cierra el bucle "
+              "sin key, sin login y sin gastar ración.",
+              {"type": "object", "properties": {
+                  "imagenes": {"type": "array", "items": {"type": "string"}},
+                  "biblia": {"type": "string"},
+                  "out_path": {"type": "string"},
+                  "encargo": {"type": "string"},
+                  "segundos_por_plano": {"type": "number"}},
+               "required": ["imagenes", "biblia", "out_path", "encargo"]},
+              access={"read", "write", "exec"}, dangerous=True)
+    async def animatica_hasta_cumplir(imagenes: list, biblia: str,
+                                      out_path: str, encargo: str, ctx=None,
+                                      segundos_por_plano: float = 5.0):
+        """El bucle cerrado sobre el único generador que hoy existe sin key.
+
+        Las correcciones no son decorativas: cada eje incumplido mueve un
+        parámetro concreto del montaje. Si la cámara se mueve de más, se apaga
+        el Ken Burns —que es exactamente lo que la mueve—; si los planos duran
+        poco, se alargan. Un bucle que reintenta con los mismos parámetros no
+        es un bucle, es la misma pasada cuatro veces.
+        """
+        from .bucle import BibliaDeEstilo, Tolerancia, rueda_hasta_cumplir
+        from .video import Slide, VideoSpec, render_slideshow
+
+        destino = ctx.resolve(out_path) if ctx else Path(out_path)
+        bp = ctx.resolve(biblia) if ctx else Path(biblia)
+        rutas = [str(ctx.resolve(i) if ctx else Path(i)) for i in imagenes]
+        if not bp.exists():
+            return ToolResult(False, "", error=f"no existe la biblia {bp}")
+        try:
+            crudo = json.loads(bp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            return ToolResult(False, "", error=f"biblia ilegible: {e}")
+        b = BibliaDeEstilo(
+            nombre=crudo.get("nombre", ""), origen=crudo.get("origen", ""),
+            procedencia=crudo.get("procedencia", "desconocida"),
+            tolerancias=[Tolerancia(**t) for t in crudo.get("tolerancias", [])])
+
+        if ctx and getattr(ctx, "journal", None):
+            ctx.journal.record(destino, "create", tool="animatica_hasta_cumplir")
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        estado = {"seg": float(segundos_por_plano), "ken": True}
+
+        async def generar(version: int, correcciones: list):
+            for c in correcciones:
+                if c.startswith("camara_px") and "BAJARLO" in c:
+                    estado["ken"] = False
+                elif c.startswith("fraccion_camara_fija") and "SUBIRLO" in c:
+                    estado["ken"] = False
+                elif c.startswith("duracion_media_plano"):
+                    estado["seg"] *= 1.6 if "SUBIRLO" in c else 0.65
+            spec = VideoSpec(
+                slides=[Slide(r, max(0.6, estado["seg"])) for r in rutas],
+                ken_burns=estado["ken"])
+            obs = await render_slideshow(spec, destino)
+            return destino if obs.ok else None
+
+        r = await rueda_hasta_cumplir(encargo, b, generar)
+        cuerpo = [r.render(), f"parámetros finales: "
+                  f"{estado['seg']:.2f}s por plano, "
+                  f"ken_burns={'sí' if estado['ken'] else 'no'}"]
+        if r.medida is not None and r.medida.no_medido:
+            cuerpo.append("sin juzgar (fuera del contrato):")
+            cuerpo += [f"  · {s}" for s in r.medida.no_medido]
+        return ToolResult(r.ok, "\n".join(cuerpo),
+                          error=None if r.ok else (r.motivo or r.estado),
+                          meta={"estado": r.estado, "path": str(destino),
+                                "pasadas": r.version})
+
+    @reg.tool("cascaron_estado",
+              "Dice qué sabe percibir esta máquina en local (escala de plano, "
+              "identidad entre planos) y, si falta algo, exactamente qué "
+              "fichero hace falta, cuánto pesa y dónde ponerlo.",
+              {"type": "object", "properties": {}}, access={"read"})
+    async def cascaron_estado(ctx=None):
+        from .cascaron import informe_cascaron
+        from .estilo import informe_instrumento
+        inf = informe_cascaron()
+        ins = informe_instrumento()
+        lineas = [
+            "instrumento: " + ", ".join(
+                f"{k}={'sí' if v else 'NO'}" for k, v in ins.items()),
+            "cascarón local: " + ", ".join(
+                f"{k}={'sí' if v else 'NO'}"
+                for k, v in (("cv2", inf["cv2"]), ("detector", inf["detector"]),
+                             ("identidad", inf["identidad"]))),
+            f"detector: {inf['detector_tipo'] or 'ninguno'}",
+            f"modelos en: {inf['carpeta_modelos']}",
+        ]
+        faltan = list(inf["falta"])                   # type: ignore[arg-type]
+        if faltan:
+            lineas.append("FALTA, y así se arregla:")
+            lineas += [f"  · {f}" for f in faltan]
+        # `ok` es «he podido responder», no «está todo». Que falte un modelo
+        # es información, no un fallo de la herramienta.
+        return ToolResult(True, "\n".join(lineas),
+                          meta={"instrumento": ins, "cascaron": inf})
+
     @reg.tool("biblia_de_estilo",
               "Convierte la medida de un vídeo de REFERENCIA en la biblia de "
               "estilo del encargo y la guarda en JSON. Los números salen del "

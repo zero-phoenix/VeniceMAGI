@@ -190,6 +190,17 @@ class MedidaEstilo:
     luma: float | None = None
     saturacion: float | None = None
     contraste: float | None = None
+    #: ESCALA DE PLANO. Mediana de la altura del rostro mayor como fracción
+    #: del alto del cuadro, sobre los fotogramas donde se detecta alguno.
+    #: Distingue un cine de primeros planos de uno de planos generales, que
+    #: es la decisión de encuadre más visible de todas y la que el medidor no
+    #: podía ver hasta que entró el cascarón local.
+    escala_plano: float | None = None
+    escala_plano_nombre: str = ""
+    #: Fracción de fotogramas con al menos un rostro FRONTAL. Es un suelo, no
+    #: un censo: una nuca no la ve nadie, y este cine está lleno de nucas.
+    fraccion_con_rostro: float | None = None
+    rostros_por_fotograma: float | None = None
 
     # --- oídos --------------------------------------------------------
     tiene_audio: bool = False
@@ -200,6 +211,18 @@ class MedidaEstilo:
     #: Fracción del tiempo con energía dominante en la banda de la voz.
     fraccion_banda_voz: float | None = None
     rango_dinamico_db: float | None = None
+    #: RITMO DE LOS TURNOS. Tramos de sonido sostenido separados por pausas.
+    #: No dice QUIÉN habla —eso exige diarización— pero sí con qué cadencia se
+    #: habla, y en un cine donde lo importante es lo que no se dice, la
+    #: cadencia de las pausas ES la dirección. Se mide con la envolvente que
+    #: ya estaba calculada: cero dependencias nuevas, cero modelos.
+    turnos_por_minuto: float | None = None
+    duracion_media_turno: float | None = None
+    pausa_media: float | None = None
+    #: La pausa más larga entre dos turnos. Un silencio de seis segundos en
+    #: mitad de una conversación es una decisión de dirección, y la media lo
+    #: esconde entre pausas de medio segundo.
+    pausa_maxima: float | None = None
 
     # --- honestidad ---------------------------------------------------
     no_medido: list[str] = field(default_factory=list)
@@ -222,8 +245,15 @@ class MedidaEstilo:
             p.append(f"fija {self.fraccion_camara_fija:.0%}")
         if self.saturacion is not None:
             p.append(f"sat {self.saturacion:.3f}")
+        if self.escala_plano is not None:
+            p.append(f"escala {self.escala_plano:.3f} "
+                     f"({self.escala_plano_nombre})")
         if self.fraccion_silencio is not None:
             p.append(f"silencio {self.fraccion_silencio:.0%}")
+        if self.turnos_por_minuto is not None:
+            p.append(f"{self.turnos_por_minuto:.0f} turnos/min")
+        if self.pausa_maxima is not None:
+            p.append(f"pausa máx {self.pausa_maxima:.1f}s")
         cabeza = " · ".join(p) or "sin medidas"
         if self.no_medido:
             cabeza += f"  [{len(self.no_medido)} sin medir]"
@@ -471,90 +501,108 @@ async def _mide_imagen(ruta: Path, medida: MedidaEstilo) -> None:
                 "no hubo dos fotogramas consecutivos dentro del mismo plano: "
                 "el movimiento de cámara no se ha medido")
 
-        medida.no_medido.append(
-            "escala de plano (primer plano contra plano general): exige un "
-            "detector de rostros local, que este sistema todavía no tiene")
     finally:
         shutil.rmtree(destino, ignore_errors=True)
 
 
-# ----------------------------------------------------------------- los oídos
+#: Anchura a la que se extraen los fotogramas PARA ROSTROS, distinta de la del
+#: resto del análisis y por un motivo concreto: paleta, cortes y
+#: desplazamiento global se miden perfectamente en 128 px, pero a esa anchura
+#: un rostro de primer plano ocupa 30 px y uno de plano general no llega a 6.
+#: La cascada Haar no ve nada ahí. Se paga resolución solo donde hace falta.
+ANCHO_ROSTROS = 480
 
-async def _mide_audio(ruta: Path, medida: MedidaEstilo) -> None:
-    """Mide la banda sonora. No la escucha: la mide.
+#: Cadencia del muestreo para rostros. Más baja que la del resto porque la
+#: detección es lo caro y la escala de plano no cambia dentro de un plano —
+#: para eso está la cámara fija.
+MUESTREO_ROSTROS_FPS = 1.0
 
-    POR QUÉ MEDIR Y NO ESCUCHAR
-    ===========================
-    Nadie en esta cadena —ni los proveedores guest, ni el sistema— oye. Pero
-    lo que hace falta para dirigir no es una impresión auditiva: son números.
-    Si el ambiente domina y no hay música bajo el diálogo, eso se ve en la
-    envolvente y en el reparto de energía por bandas, y se ve mejor que
-    oyéndolo, porque sale un número que se puede comparar contra el corte
-    generado.
 
-    Lo que NO se mide aquí, y se declara: quién habla, qué dice, y si dos
-    voces se solapan. Separar voces exige diarización, que es un modelo. En
-    cuanto el cascarón local tenga uno, entra por esta misma puerta.
+async def _mide_rostros(ruta: Path, medida: MedidaEstilo) -> None:
+    """Escala de plano, con el detector que viene dentro de OpenCV.
+
+    Se hace en una pasada aparte y a más resolución (ver `ANCHO_ROSTROS`).
+    Podría parecer un desperdicio extraer los fotogramas dos veces; es más
+    barato que subir la resolución de TODO el análisis para que un solo eje
+    funcione, y mantiene los demás ejes idénticos a como estaban calibrados.
     """
+    from . import cascaron
+
+    if not cascaron.detector_disponible():
+        # Se copian los motivos concretos del informe del cascarón en vez de
+        # escribir «no disponible»: un aviso que no dice cómo se arregla
+        # obliga a quien lo lee a ir a buscarlo, y normalmente no va.
+        for motivo in cascaron.informe_cascaron()["falta"]:   # type: ignore
+            medida.no_medido.append(str(motivo))
+        return
+
     import numpy as np
+    from PIL import Image
 
-    rc, crudo = await _corre([
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
-        "-i", str(ruta), "-vn", "-ac", "1", "-ar", str(AUDIO_HZ),
-        "-f", "s16le", "-"], timeout=300)
-    if rc != 0 or len(crudo) < AUDIO_HZ:
-        medida.tiene_audio = False
-        medida.no_medido.append(
-            "sin pista de audio utilizable: no se ha medido nada del sonido")
-        return
+    from ...core.paths import cache_dir
 
-    medida.tiene_audio = True
-    x = np.frombuffer(crudo, dtype="<i2").astype(np.float32) / 32768.0
-    n_v = max(1, int(AUDIO_HZ * AUDIO_VENTANA))
-    n_ventanas = len(x) // n_v
-    if n_ventanas < 4:
-        medida.no_medido.append("audio demasiado corto para medir")
-        return
-    marco = x[:n_ventanas * n_v].reshape(n_ventanas, n_v)
+    huella = hashlib.sha1(
+        (str(ruta.resolve()) + "rostros").encode("utf-8")).hexdigest()[:10]
+    destino = cache_dir() / "estilo_rostros" / f"{ruta.stem}-{huella}"
+    shutil.rmtree(destino, ignore_errors=True)
+    destino.mkdir(parents=True, exist_ok=True)
+    try:
+        rc, _ = await _corre([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(ruta),
+            "-vf", f"fps={MUESTREO_ROSTROS_FPS},scale={ANCHO_ROSTROS}:-2",
+            "-frames:v", "600",
+            str(destino / "r_%05d.png")], timeout=600)
+        marcos = sorted(destino.glob("r_*.png"))
+        if rc != 0 or not marcos:
+            medida.no_medido.append(
+                "no se pudieron extraer fotogramas para medir rostros")
+            return
 
-    rms = np.sqrt((marco ** 2).mean(axis=1) + 1e-12)
-    medida.rms_medio = round(float(rms.mean()), 5)
+        escalas: list[float] = []
+        cuentas: list[int] = []
+        for m in marcos:
+            with Image.open(m) as im:
+                gris = np.asarray(im.convert("L"), dtype=np.uint8)
+            rostros = cascaron.detecta_rostros(gris)
+            cuentas.append(len(rostros))
+            frac = cascaron.escala_de_plano(rostros, gris.shape[0])
+            if frac is not None:
+                escalas.append(frac)
 
-    # Umbral de silencio RELATIVO al propio material, no absoluto. Un absoluto
-    # declara «todo silencio» en una mezcla suave y «nada de silencio» en una
-    # ruidosa, y las dos lecturas son del volumen de masterizado, no del cine.
-    pico = float(np.percentile(rms, 95))
-    umbral = max(pico * 0.06, 1e-4)
-    medida.fraccion_silencio = round(float((rms < umbral).mean()), 4)
+        medida.rostros_por_fotograma = round(
+            sum(cuentas) / max(1, len(cuentas)), 3)
+        medida.fraccion_con_rostro = round(
+            sum(1 for c in cuentas if c) / max(1, len(cuentas)), 4)
 
-    p95, p05 = float(np.percentile(rms, 95)), float(np.percentile(rms, 5))
-    medida.rango_dinamico_db = round(
-        20.0 * math.log10(max(p95, 1e-9) / max(p05, 1e-9)), 2)
+        if escalas:
+            escalas.sort()
+            medida.escala_plano = round(escalas[len(escalas) // 2], 4)
+            medida.escala_plano_nombre = cascaron.nombre_de_escala(
+                medida.escala_plano)
+            medida.evidencia.append(
+                f"rostros: {len(marcos)} fotogramas a {MUESTREO_ROSTROS_FPS} "
+                f"fps · con rostro {medida.fraccion_con_rostro:.0%} · escala "
+                f"mediana {medida.escala_plano:.3f} "
+                f"({medida.escala_plano_nombre})")
+        else:
+            # NO es «plano general». Es que no se detectó ninguna cara
+            # frontal, y las dos cosas se parecen mucho y significan lo
+            # contrario. Sin esta rama, un documental de nucas mediría como
+            # el plano más abierto posible.
+            medida.no_medido.append(
+                f"no se detectó ningún rostro frontal en {len(marcos)} "
+                f"fotogramas: la escala de plano queda SIN MEDIR. No "
+                f"significa plano general — un detector frontal no ve "
+                f"perfiles ni nucas.")
 
-    # Reparto de energía por bandas sobre las ventanas con sonido. La banda de
-    # la voz (300-3400 Hz) dominando indica diálogo y ambiente; una cola de
-    # graves fuerte indica música con base.
-    activas = marco[rms >= umbral]
-    if len(activas) >= 4:
-        vent = np.hanning(n_v).astype(np.float32)
-        esp = np.abs(np.fft.rfft(activas * vent, axis=1)) ** 2
-        frec = np.fft.rfftfreq(n_v, 1.0 / AUDIO_HZ)
-        voz = esp[:, (frec >= 300) & (frec <= 3400)].sum(axis=1)
-        total = esp.sum(axis=1) + 1e-12
-        ratio = voz / total
-        medida.fraccion_banda_voz = round(float((ratio > 0.5).mean()), 4)
-        medida.evidencia.append(
-            f"audio: {n_ventanas} ventanas de {AUDIO_VENTANA * 1000:.0f} ms · "
-            f"silencio {medida.fraccion_silencio:.0%} · "
-            f"rango {medida.rango_dinamico_db:.1f} dB")
-    else:
-        medida.no_medido.append(
-            "casi todo el audio está por debajo del umbral: no se ha podido "
-            "repartir la energía por bandas")
+        if not cascaron.identidad_disponible():
+            for motivo in cascaron.informe_cascaron()["falta"]:  # type: ignore
+                if "identidad" in str(motivo):
+                    medida.no_medido.append(str(motivo))
+    finally:
+        shutil.rmtree(destino, ignore_errors=True)
 
-    medida.no_medido.append(
-        "solapamiento de diálogo y separación de voces: exige diarización, "
-        "que este sistema todavía no tiene en local")
 
 
 # ------------------------------------------------------------------- fachada
@@ -613,12 +661,21 @@ async def medir(ruta: str | Path, *,
         except Exception as e:                        # pragma: no cover
             logger.debug("[estilo] fallo midiendo imagen: %s", e)
             m.no_medido.append(f"parte visual falló: {type(e).__name__}: {e}")
+        try:
+            await _mide_rostros(p, m)
+        except EstiloError as e:
+            m.no_medido.append(f"escala de plano: {e}")
+        except Exception as e:                        # pragma: no cover
+            logger.debug("[estilo] fallo midiendo rostros: %s", e)
+            m.no_medido.append(
+                f"escala de plano falló: {type(e).__name__}: {e}")
 
     if any(s.get("codec_type") == "audio" for s in flujos):
         if not numpy_disponible():
             m.no_medido.append("numpy sin instalar: el audio no se ha medido")
         else:
             try:
+                from .oido import _mide_audio
                 await _mide_audio(p, m)
             except EstiloError as e:
                 m.no_medido.append(f"parte de audio: {e}")
@@ -632,169 +689,18 @@ async def medir(ruta: str | Path, *,
     return m
 
 
-# ------------------------------------------------------------- biblia y juicio
-
-#: Ejes que NO sobreviven a un tráiler: los decide el montador del tráiler,
-#: no el director de la película.
-EJES_SOLO_OBRA = frozenset({"duracion_media_plano", "planos",
-                            "fraccion_silencio", "rango_dinamico_db",
-                            "fraccion_banda_voz"})
-
-
-@dataclass
-class Tolerancia:
-    """Cuánto se puede desviar un eje antes de declararlo incumplido."""
-    eje: str
-    objetivo: float
-    margen: float
-    #: Si es True, basta con estar POR DEBAJO del objetivo más el margen.
-    #: Sirve para «la cámara no debe moverse más de X», donde quedarse corto
-    #: no es un fallo.
-    solo_maximo: bool = False
-
-
-@dataclass
-class BibliaDeEstilo:
-    """La dirección artística, en números, con su procedencia.
-
-    Se construye desde una `MedidaEstilo` de la REFERENCIA. No se escribe a
-    mano: una biblia escrita a mano son las suposiciones de quien la escribe
-    con aspecto de dato.
-    """
-    nombre: str = ""
-    origen: str = ""
-    procedencia: str = "desconocida"
-    tolerancias: list[Tolerancia] = field(default_factory=list)
-
-    @classmethod
-    def desde(cls, medida: MedidaEstilo, *, nombre: str = "referencia",
-              holgura: float = 0.15) -> BibliaDeEstilo:
-        """Deriva tolerancias de una medida real.
-
-        `holgura` es la fracción del propio valor que se admite de desvío.
-        Relativa y no absoluta porque un margen absoluto que vale para la
-        saturación (0-1) no vale para la duración de plano (segundos).
-        """
-        b = cls(nombre=nombre, origen=medida.ruta,
-                procedencia=medida.procedencia)
-        pares = [
-            ("aspecto", medida.aspecto, False),
-            ("duracion_media_plano", medida.duracion_media_plano, False),
-            ("camara_px", medida.camara_px, True),
-            ("fraccion_camara_fija", medida.fraccion_camara_fija, False),
-            ("saturacion", medida.saturacion, False),
-            ("luma", medida.luma, False),
-            ("contraste", medida.contraste, False),
-            ("fraccion_silencio", medida.fraccion_silencio, False),
-        ]
-        for eje, valor, solo_max in pares:
-            if valor is None:
-                continue
-            if medida.procedencia == "trailer" and eje in EJES_SOLO_OBRA:
-                continue
-            b.tolerancias.append(Tolerancia(
-                eje=eje, objetivo=float(valor),
-                margen=abs(float(valor)) * holgura or holgura,
-                solo_maximo=solo_max))
-        return b
-
-    def to_json(self) -> str:
-        from dataclasses import asdict
-        return json.dumps(asdict(self), indent=2, ensure_ascii=False)
-
-
-@dataclass
-class Desvio:
-    eje: str
-    objetivo: float
-    obtenido: float | None
-    margen: float
-    cumple: bool
-    motivo: str = ""
-
-
-@dataclass
-class Veredicto:
-    """Qué cumple, qué no, y qué no se pudo juzgar. Las tres cosas."""
-    desvios: list[Desvio] = field(default_factory=list)
-    sin_juzgar: list[str] = field(default_factory=list)
-
-    @property
-    def incumplidos(self) -> list[Desvio]:
-        return [d for d in self.desvios if not d.cumple]
-
-    @property
-    def aprueba(self) -> bool:
-        """Aprueba solo si TODO lo comprobable cumple y no falta nada.
-
-        Un eje que no se pudo medir NO aprueba por omisión. Es la quinta
-        regla del proyecto, y es la que se saltó `observe_video` cuando sin
-        Pillow devolvía «correcto» sobre una captura que nunca abrió.
-        """
-        return not self.incumplidos and not self.sin_juzgar
-
-    def render(self) -> str:
-        lineas = []
-        for d in self.desvios:
-            marca = "OK  " if d.cumple else "FALLA"
-            obt = "sin medir" if d.obtenido is None else f"{d.obtenido:.4g}"
-            lineas.append(
-                f"  {marca} {d.eje:<22} objetivo {d.objetivo:.4g} "
-                f"±{d.margen:.4g} · obtenido {obt}")
-        for s in self.sin_juzgar:
-            lineas.append(f"  ????  {s}")
-        cab = ("APRUEBA" if self.aprueba
-               else f"NO APRUEBA · {len(self.incumplidos)} incumplidos, "
-                    f"{len(self.sin_juzgar)} sin juzgar")
-        return cab + "\n" + "\n".join(lineas)
-
-    def lista_para_reintento(self) -> list[str]:
-        """Los incumplimientos, en frases que se le pueden dar a un modelo.
-
-        Un veredicto negativo no manda «hazlo mejor»: manda la lista concreta
-        de lo que falló, igual que el reintento dirigido del taller de arte.
-        """
-        fuera = []
-        for d in self.incumplidos:
-            if d.obtenido is None:
-                fuera.append(f"{d.eje}: no se pudo medir ({d.motivo})")
-            elif d.obtenido > d.objetivo:
-                fuera.append(
-                    f"{d.eje}: salió {d.obtenido:.4g} y el objetivo es "
-                    f"{d.objetivo:.4g}. Hay que BAJARLO.")
-            else:
-                fuera.append(
-                    f"{d.eje}: salió {d.obtenido:.4g} y el objetivo es "
-                    f"{d.objetivo:.4g}. Hay que SUBIRLO.")
-        return fuera
-
-
-def compara(medida: MedidaEstilo, biblia: BibliaDeEstilo) -> Veredicto:
-    """Enfrenta una medida contra la biblia. Función pura, sin red ni disco.
-
-    Pura a propósito, igual que `build_filtergraph` en `video.py`: así se
-    puede comprobar en un test sin generar un vídeo ni esperar dos minutos,
-    que es la diferencia entre tener tests de esto y no tenerlos.
-    """
-    v = Veredicto()
-    for tol in biblia.tolerancias:
-        obtenido = getattr(medida, tol.eje, None)
-        if obtenido is None:
-            v.desvios.append(Desvio(
-                eje=tol.eje, objetivo=tol.objetivo, obtenido=None,
-                margen=tol.margen, cumple=False,
-                motivo="el instrumento no pudo medir este eje"))
-            continue
-        obtenido = float(obtenido)
-        if tol.solo_maximo:
-            cumple = obtenido <= tol.objetivo + tol.margen
-        else:
-            cumple = abs(obtenido - tol.objetivo) <= tol.margen
-        v.desvios.append(Desvio(
-            eje=tol.eje, objetivo=tol.objetivo, obtenido=obtenido,
-            margen=tol.margen, cumple=cumple))
-    # Lo que el instrumento declaró que no pudo medir viaja al veredicto. Si
-    # se quedara en la medida, un corte cuyo movimiento de cámara no se pudo
-    # medir aprobaría por no tener ningún desvío en contra.
-    v.sin_juzgar = list(medida.no_medido)
-    return v
+# ----------------------------------------------------------------- el juicio
+#
+# `BibliaDeEstilo`, `compara` y compañía viven en `biblia.py`. Se reexportan
+# aquí porque la frontera útil para quien LLAMA es «lo del estilo», y obligarle
+# a importar de dos módulos para medir y juzgar es la clase de costura que
+# acaba en dos formas distintas de hacer lo mismo. La frontera que sí importa
+# —medir no juzga— la impone el código, no el import.
+from .biblia import (  # noqa: E402,F401
+    EJES_SOLO_OBRA,
+    BibliaDeEstilo,
+    Desvio,
+    Tolerancia,
+    Veredicto,
+    compara,
+)

@@ -96,8 +96,8 @@ SCRIPT = RAIZ / "scripts" / "huerfanos.py"
 # a gastar sin que nadie se entere — que es la mitad del mecanismo que siempre
 # se olvida.
 #
-# 87 desde el 2026-09-02, y el caso es instructivo. Entró un módulo nuevo
-# entero —`studio/estilo.py`, el medidor de estilo— y el conteo BAJÓ uno.
+# 87 el 2026-09-02, y el caso es instructivo. Entró un módulo nuevo entero
+# —`studio/estilo.py`, el medidor de estilo— y el conteo BAJÓ uno.
 #
 # La primera versión sí subía: traía sus propias `ffmpeg_disponible` y
 # `ffprobe_disponible`, que son exactamente las preguntas que `video.py` ya
@@ -109,7 +109,16 @@ SCRIPT = RAIZ / "scripts" / "huerfanos.py"
 # Al reusar las de `video.py` desaparecen las dos copias Y se conecta
 # `ffprobe_available`, que llevaba tiempo definida sin que nadie la llamara.
 # El trinquete no cazó un descuido de estilo: cazó una duplicación.
-TECHO = 87
+#
+# 84 el mismo día, y esta vez por lo que este mecanismo persigue desde que
+# existe. `studio/bucle.py` es el cable que le faltaba a tres módulos que
+# llevaban aquí señalados desde su creación: `loop.py` —cuyo propio docstring
+# confesaba que su función de medida «es un mock»—, `spec.py` y `rights.py`.
+# Motor de convergencia completo, contrato medible completo, control de
+# derechos completo, y ningún llamador. Conectarlos al medidor de estilo
+# retira `AutoCorrectionLoop`, `SpecError`, `RightsGate` y `RightsBlockedError`
+# de la lista, y de paso el bucle del plan pasa a medir ficheros de verdad.
+TECHO = 84
 
 #: techos por paquete (2026-08-16, tras archivar 6 paquetes sin importadores:
 #: device, fabrication, vision, reasoning, os_portable, capabilities -> _attic). El total puede
@@ -126,11 +135,12 @@ TECHO = 87
 #: enseñando exactamente para lo que existe: el total bajó, pero no bajó en
 #: todas partes. `venice` creció con `seedance_admitido`, que es la regla de
 #: versiones que sustituyó a dos comparaciones de cadenas.
-#: 2026-09-02: `vmagi/modules` baja de 63 a 62 con la entrada del medidor de
-#: estilo. Un módulo nuevo que hace bajar el desglose es justo lo que este
-#: mecanismo persigue: no basta con que lo añadido esté conectado, tiene que
-#: no duplicar lo que ya había.
-TECHOS_POR_PAQUETE = {"vmagi/modules": 62, "vmagi/core": 17,
+#: 2026-09-02: `vmagi/modules` baja de 63 a 59 en dos pasos. Primero a 62 con
+#: la entrada del medidor de estilo —un módulo nuevo que hace bajar el
+#: desglose, porque no basta con que lo añadido esté conectado: tiene que no
+#: duplicar lo que ya había—. Después a 59 al cablear `loop.py`, `spec.py` y
+#: `rights.py`, que llevaban señalados aquí desde el primer día.
+TECHOS_POR_PAQUETE = {"vmagi/modules": 59, "vmagi/core": 17,
                       "vmagi/venice": 6, "vmagi/repl": 2}
 
 
@@ -154,6 +164,36 @@ def _por_paquete() -> dict[str, int]:
         paquete = "/".join(partes[:2]) if partes[0] == "vmagi" and len(partes) > 2 else partes[0]
         conteo[paquete] = conteo.get(paquete, 0) + 1
     return conteo
+
+
+def test_el_entorno_virtual_del_README_no_falsea_el_conteo():
+    """El directorio que las instrucciones de instalación mandan crear.
+
+    EL FALLO, MEDIDO. Mismo commit y mismo código en dos máquinas: 87
+    huérfanos sin entorno virtual, **78** con un `.venv` recién creado dentro
+    del repo. Nueve piezas pasaban por «conectadas» porque su nombre aparecía
+    en algún fichero de site-packages, y el índice de uso busca en TODO el
+    repositorio a propósito.
+
+    Lo grave no es el número, son dos cosas:
+
+      1. El README dice literalmente `python -m venv .venv`. Seguir las
+         instrucciones del proyecto rompía el trinquete del proyecto.
+      2. Lo rompía HACIA ABAJO, que es la dirección que no avisa. Un conteo
+         que baja parece una mejora, y `test_si_baja_el_conteo_se_baja_el_techo`
+         habría invitado a consolidar como logro un margen que no existía.
+
+    `EXCLUIDOS` ya tenía `venv` y `.venv-lock` — el comentario de 2026-08-16
+    cuenta que este mismo problema ya se pagó una vez con site-packages. Lo
+    que faltaba era justo el nombre que el README manda usar.
+    """
+    import scripts.huerfanos as h  # noqa: PLC0415
+
+    assert ".venv" in h.EXCLUIDOS, (
+        "`.venv` no está excluido, y es el nombre que el README manda crear. "
+        "Con él dentro, el conteo baja solo y el trinquete deja de medir.")
+    # Y el que ya estaba, que no se pierda por el camino.
+    assert {".venv-lock", "venv", "site-packages"} <= h.EXCLUIDOS
 
 
 def test_el_codigo_publico_sin_llamar_no_crece():

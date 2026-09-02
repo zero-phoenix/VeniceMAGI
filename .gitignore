@@ -1,6 +1,14 @@
 __pycache__/
 *.pyc
 *.pyo
+# `.venv/` es el nombre que las instrucciones de instalación del README mandan
+# crear (`python -m venv .venv`), y era justo el que faltaba: estaban `venv/`,
+# `env/` y `.venv-lock/`, pero no este. Un `git add -A` tras seguir el propio
+# README metió 10.000 ficheros de site-packages en un commit.
+# Es el MISMO agujero que tenía `EXCLUIDOS` en scripts/huerfanos.py, y por el
+# mismo motivo: la lista se escribió pensando en nombres plausibles en vez de
+# en el nombre que el proyecto usa.
+.venv/
 venv/
 env/
 .env
