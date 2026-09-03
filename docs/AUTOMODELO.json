@@ -214,5 +214,23 @@
   "evidencia": "REFUTADA Y ARREGLADA. `axis=3 - 1` queria decir 'el ultimo eje' y sobre un fotograma suelto lo habria sido; sobre la pila de fotogramas, el eje 2 es la anchura. Toda biblia construida antes de este arreglo llevaba un objetivo de saturacion que no medía color. Lo caza un test que compara un verde saturado con rejilla roja contra el mismo video en gris puro: antes 0,313 -> 0,262; ahora se desploma como tiene que desplomarse.",
   "veces_ok": 1,
   "veces_mal": 1
+ },
+ {
+  "texto": "El sistema cura su propio corpus de entrenamiento sin alquilar vision",
+  "prueba": "minero_de_corpus",
+  "estado": "sostenida",
+  "ultima": "2026-09-03 00:00",
+  "evidencia": "studio/corpus.py trocea un video de referencia en planos, mide cada uno con estilo.py y se queda solo con los del genero. 15 tests. El informe de Open-Sora 2.0 -el unico modelo de video de nivel comercial que publica lo que costo, 200.000 dolares- atribuye su eficiencia sobre todo a la CURACION DE DATOS, que en la industria significa alquilar un modelo con vision por hora para describir cada clip. Aqui la etiqueta no es una frase generada: son los numeros del medidor, reproducibles y gratis. Comprobado que dos pasadas dan el mismo corpus -sin eso, una comparacion entre modelos no distingue si mejoro el modelo o cambio el examen- y que el material de otro genero se rechaza ENTERO con el motivo escrito.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Un denoiser propio de un solo genero es alcanzable; uno general no",
+  "prueba": "especialista_frente_a_generalista",
+  "estado": "sin_comprobar",
+  "ultima": "",
+  "evidencia": "Investigado el 2026-09-03. La atencion completa espacio-temporal cuesta O(T^2*S^2) y toda la arquitectura de estos modelos existe para esquivar ese exponente: Seedance desacopla capas espaciales y temporales y las cose con ventanas desplazadas; LTX hace lo contrario -comprime a 1:192 moviendo el patchify al VAE hasta que la atencion completa vuelve a caber-; Wan 2.2 parte el calendario de ruido en dos expertos por SNR; HunyuanVideo 1.5 decide la dispersion en ejecucion con SSTA. El coste real esta auditado: Open-Sora 2.0 documenta 200.000 dolares para un modelo GENERAL. Un especialista de camara fija e interiores tiene una distribucion de datos varios ordenes de magnitud menor y casi no tiene que modelar movimiento de camara, que es la mitad de la dificultad. La hipotesis es que baja a cientos de euros. SIN COMPROBAR: hasta que el escalon cero -un DiT de juguete entrenado en la propia GTX 1050 sobre formas que se mueven- demuestre que el andamiaje esta bien cosido, alquilar una GPU seria pagar por descubrir un bug.",
+  "veces_ok": 0,
+  "veces_mal": 0
  }
 ]

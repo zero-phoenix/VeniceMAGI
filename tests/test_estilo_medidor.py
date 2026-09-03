@@ -732,6 +732,27 @@ async def test_el_bucle_completo_referencia_biblia_juicio(
     assert len(bueno.meta["incumplidos"]) < len(malo.meta["incumplidos"])
 
 
+@sin_ffmpeg
+async def test_probe_devuelve_el_contrato_que_promete(camara_fija):
+    """`VideoInfo` es el tipo que `probe()` devuelve, y llevaba sin un solo
+    test que lo comprobara por su nombre.
+
+    No es formalismo: media docena de sitios leen `info.duration` e
+    `info.fps` dando por hecho que existen. El día que alguien devuelva un
+    diccionario en su lugar «porque es más cómodo», esos sitios fallan con
+    `AttributeError` en tiempo de ejecución y no al importar.
+    """
+    from vmagi.modules.studio.video import VideoInfo, probe
+
+    info = await probe(camara_fija)
+    assert isinstance(info, VideoInfo)
+    assert info.width > 0 and info.height > 0
+    assert info.duration > 0 and info.fps > 0
+    assert info.codec and info.size_bytes > 0
+    assert isinstance(info.has_audio, bool)
+    assert info.render()          # la línea legible que sale en los informes
+
+
 def test_informe_del_instrumento_no_miente():
     inf = E.informe_instrumento()
     assert set(inf) == {"ffmpeg", "ffprobe", "numpy", "pillow"}

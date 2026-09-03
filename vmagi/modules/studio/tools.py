@@ -494,6 +494,50 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
                                 "genero_algo": r.genero_algo,
                                 "sembrado": sembrado})
 
+    @reg.tool("minar_corpus",
+              "Trocea un vídeo de referencia en planos, mide cada uno y se "
+              "queda solo con los que pertenecen al género pedido. Escribe un "
+              "manifiesto con la medida completa de cada clip como etiqueta, "
+              "y dice qué rechazó y por qué.",
+              {"type": "object", "properties": {
+                  "referencia": {"type": "string"},
+                  "destino": {"type": "string"},
+                  "camara_maxima_px": {"type": "number"},
+                  "plano_minimo_s": {"type": "number"},
+                  "tope": {"type": "integer",
+                           "description": "máximo de tramos a minar"}},
+               "required": ["referencia", "destino"]},
+              access={"read", "write", "exec"}, dangerous=True)
+    async def minar_corpus(referencia: str, destino: str, ctx=None,
+                           camara_maxima_px: float = 1.15,
+                           plano_minimo_s: float = 2.0, tope: int = 400):
+        """La curación de datos, hecha con el instrumento que ya existe.
+
+        Etiquetar clips de vídeo cuesta dinero en cualquier otro sitio: se
+        alquila un modelo con visión por hora para que describa cada uno.
+        Aquí la etiqueta no es una frase generada, son los números del
+        medidor — reproducibles, comparables y gratis.
+        """
+        from .corpus import CriterioDeGenero, mina
+        ref = ctx.resolve(referencia) if ctx else Path(referencia)
+        dest = ctx.resolve(destino) if ctx else Path(destino)
+        if ctx and getattr(ctx, "journal", None):
+            ctx.journal.record(dest, "create", tool="minar_corpus")
+        crit = CriterioDeGenero(camara_maxima_px=float(camara_maxima_px),
+                                plano_minimo_s=float(plano_minimo_s))
+        c = await mina(ref, dest, criterio=crit, tope=int(tope))
+        # `ok` es «salió corpus», no «el material era bueno». Cero aceptados
+        # con los motivos escritos es un resultado informativo, no un fallo
+        # de la herramienta — pero tampoco es un éxito.
+        return ToolResult(
+            bool(c.aceptados), c.render(),
+            error=None if c.aceptados else
+            "ningún clip pasó el criterio del género",
+            meta={"aceptados": len(c.aceptados),
+                  "rechazados": len(c.rechazados),
+                  "segundos": round(c.segundos, 2),
+                  "manifiesto": c.manifiesto})
+
     @reg.tool("auditar_medidor",
               "Fabrica un contraejemplo por cada eje de la biblia —material "
               "que DEBE suspender— y comprueba que el medidor lo suspende por "

@@ -150,7 +150,12 @@ TECHO = 83
 #: salida del auditor, y los tests los comprueban por tipo en vez de fiarse de
 #: los atributos: un auditor que devuelva dos formas distintas segun el
 #: resultado obliga a quien lo llama a adivinar.
-TECHOS_POR_PAQUETE = {"vmagi/modules": 59, "vmagi/core": 17,
+#: 2026-09-03: `vmagi/modules` baja a 58 con la entrada del minero de corpus.
+#: Otro módulo nuevo que hace bajar el desglose: sus dos tipos públicos entran
+#: conectados por contrato desde los tests, y de paso se conectó `VideoInfo`,
+#: que llevaba suelto desde su creación siendo el tipo de retorno de `probe()`
+#: —media docena de sitios leen `info.duration` dando por hecho que existe.
+TECHOS_POR_PAQUETE = {"vmagi/modules": 58, "vmagi/core": 17,
                       "vmagi/venice": 6, "vmagi/repl": 2}
 
 

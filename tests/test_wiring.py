@@ -211,6 +211,8 @@ WIRING = [
     ("RightsGate",             "vmagi/modules/studio/bucle.py",      "§5.8 derechos comprobados ANTES de generar"),
     ("MediaSpec",              "vmagi/modules/studio/bucle.py",      "§5.8 el encargo se vuelve criterios duros"),
     ("ataca",                  "vmagi/modules/studio/tools.py",      "§5.9 el enjambre audita su propio medidor"),
+    ("mina",                   "vmagi/modules/studio/tools.py",      "§5.10 curacion de corpus desde el enjambre"),
+    ("CriterioDeGenero",       "vmagi/modules/studio/tools.py",      "§5.10 el genero se declara con umbrales, no a ojo"),
 ]
 
 

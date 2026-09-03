@@ -1,269 +1,265 @@
 """
-Indexado y contraste de código de emuladores (§5.3).
+El minero de corpus: una película entra, material etiquetado sale.
 
-`analyze_port` compara CONSOLAS desde sus perfiles de hardware. Esto compara
-EMULADORES desde su código: dónde está el dynarec, cuántas líneas tiene el
-rasterizador, qué subsistema concentra el trabajo de verdad.
+El informe de Open-Sora 2.0 —el único modelo de vídeo de nivel comercial que
+publica lo que costó— atribuye su eficiencia sobre todo a la curación de
+datos. Es la parte que todos los planes se saltan porque no es vistosa, y la
+que decide si el resto sirve de algo.
+
+Estos tests comprueban lo que hace que un corpus sea un corpus y no una
+carpeta con vídeos: que el criterio se aplique, que lo rechazado se declare,
+y que dos pasadas den lo mismo.
 """
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
 import pytest
 
-from vmagi.core.tools import ToolContext, WriteJournal, build_registry
-from vmagi.modules.reverse.corpus import (
-    CorpusIndex,
-    compare_corpora,
-    index_source_tree,
-    locate_subsystem,
-    subsystem_names,
-)
+from vmagi.modules.studio import corpus as C
+from vmagi.modules.studio import estilo as E
+
+sin_ffmpeg = pytest.mark.skipif(
+    not (shutil.which("ffmpeg") and shutil.which("ffprobe")),
+    reason="hace falta ffmpeg para fabricar el material")
+sin_numpy = pytest.mark.skipif(
+    not E.numpy_disponible() or not E.pillow_disponible(),
+    reason="hace falta numpy y Pillow")
 
 
-def _make_emulator(root, name, layout):
-    """Construye un árbol de fuentes sintético con la forma de un emulador real."""
-    for rel, body in layout.items():
-        p = root / name / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(body, encoding="utf-8")
-    return root / name
+def _ffmpeg(args: list[str], destino: Path) -> Path:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args,
+         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+         str(destino)], capture_output=True, timeout=180)
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-600:]
+    return destino
 
 
-PSP_LIKE = {
-    "Core/MIPS/MIPSInt.cpp": "\n".join(
-        ["void Interpret(u32 op) {", "  switch (op >> 26) {"]
-        + [f"    case 0x{i:02x}: decodeSpecial(op); break;" for i in range(40)]
-        + ["  }", "}"]),
-    "Core/MIPS/JitCommon/JitBlockCache.cpp": "\n".join(
-        ["struct IRBlock {};", "void EmitMovReg(int a, int b) {}"]
-        + ["// regalloc" for _ in range(300)]),
-    "Core/MIPS/x86/CompALU.cpp": "\n".join(
-        ["void EmitAdd() {}", "// code_block dispatch"] + ["x" for _ in range(200)]),
-    "GPU/GLES/GPU_GLES.cpp": "\n".join(
-        ["void Draw() { glDrawArrays(); }", "// texture, shader, framebuffer"]
-        + ["// rasteriz" for _ in range(500)]),
-    "Core/HLE/sceKernelThread.cpp": "\n".join(
-        ["int sceKernelCreateThread() { return 0; }"] + ["// nid" for _ in range(400)]),
-    "Core/MemMap.cpp": "\n".join(
-        ["u32 Read32(u32 addr) { return 0; }", "void Write32(u32 a, u32 v) {}"]
-        + ["// memory_map" for _ in range(150)]),
-    "Core/CoreTiming.cpp": "\n".join(
-        ["void ScheduleEvent(int c) {}", "int downcount;"] + ["y" for _ in range(90)]),
-    "Core/SaveState.cpp": "\n".join(
-        ["void DoState(PointerWrap &p) {}"] + ["// serialize" for _ in range(120)]),
-    "UI/GameSettingsScreen.cpp": "\n".join(
-        ["// ImGui::Begin", "// menu_item"] + ["z" for _ in range(600)]),
-    "Core/Loaders.cpp": "\n".join(
-        ["bool LoadROM() { return true; }", "// ISO9660, magic"] + ["w" for _ in range(80)]),
-}
-
-NDS_LIKE = {
-    "src/ARMInterpreter.cpp": "\n".join(
-        ["void Execute(u32 op) {"] + [f"  case 0x{i:03x}: opcode(op);" for i in range(60)]
-        + ["}"]),
-    "src/ARMJIT_A64/ARMJIT_Compiler.cpp": "\n".join(
-        ["void EmitLoad() {}", "// register_alloc, code_block"]
-        + ["a" for _ in range(1500)]),
-    "src/GPU3D_Soft.cpp": "\n".join(
-        ["// rasteriz, vertex, texture"] + ["b" for _ in range(200)]),
-    "src/SPU.cpp": "\n".join(
-        ["// ADPCM mixer sample_rate", "int channel[16];"] + ["c" for _ in range(140)]),
-    "src/NDSCart.cpp": "\n".join(["// LoadROM magic"] + ["d" for _ in range(70)]),
-    "src/Memory.cpp": "\n".join(
-        ["u32 Read32(u32 a){return 0;}", "// page_table tlb"] + ["e" for _ in range(300)]),
-    "src/Savestate.cpp": "\n".join(["// serialize save_state"] + ["f" for _ in range(60)]),
-    "src/frontend/qt_sdl/main.cpp": "\n".join(
-        ["// QWidget setWindowTitle"] + ["g" for _ in range(400)]),
-}
+@pytest.fixture(scope="module")
+def del_genero(tmp_path_factory) -> Path:
+    """Cámara clavada, un sujeto cruzando: esto ES el género."""
+    d = tmp_path_factory.mktemp("corpus_ok")
+    return _ffmpeg(
+        ["-f", "lavfi", "-i", "color=c=0x3E5C43:s=480x270:d=9:r=25",
+         "-f", "lavfi", "-i", "color=c=0xE8DCC0:s=52x52:d=9:r=25",
+         "-filter_complex",
+         "[0:v]drawgrid=w=40:h=40:t=2:c=0x8A6A47@0.9[bg];"
+         "[bg][1:v]overlay=x='30+42*t':y=110[v]", "-map", "[v]"],
+        d / "obra.mp4")
 
 
-@pytest.fixture
-def corpora(tmp_path):
-    a = _make_emulator(tmp_path, "PPSSPP-like", PSP_LIKE)
-    b = _make_emulator(tmp_path, "melonDS-like", NDS_LIKE)
-    return (index_source_tree(a, name="PPSSPP"),
-            index_source_tree(b, name="melonDS"))
+@pytest.fixture(scope="module")
+def de_otro_genero(tmp_path_factory) -> Path:
+    """Panorámica pura: material correcto, género equivocado."""
+    d = tmp_path_factory.mktemp("corpus_no")
+    return _ffmpeg(
+        ["-f", "lavfi", "-i",
+         "color=c=0x3E5C43:s=1600x270:d=9:r=25,"
+         "drawgrid=w=40:h=40:t=2:c=0x8A6A47@0.9,"
+         "crop=480:270:x='90*t':y=0"],
+        d / "pan.mp4")
 
 
-# ------------------------------------------------------------- clasificación
+# ================================================= el criterio
 
-def test_indexes_and_counts(corpora):
-    psp, _ = corpora
-    assert psp.total_files == len(PSP_LIKE)
-    assert psp.total_lines > 2000
-    assert psp.name == "PPSSPP"
+def test_el_criterio_se_puede_leer_y_discutir():
+    """Umbrales explícitos, no «los buenos».
 
-
-def test_classifies_the_dynarec(corpora):
-    psp, _ = corpora
-    assert "dynarec" in psp.subsystems
-    files = [e.path for e in psp.files_for("dynarec")]
-    assert any("Jit" in f or "CompALU" in f for f in files)
-
-
-def test_path_outweighs_incidental_content(corpora):
+    Un criterio que no se puede escribir tampoco se puede discutir, y el
+    mismo minero tiene que servir para otro género cambiando los números.
     """
-    Un fichero bajo GPU/ es del subsistema gráfico aunque mencione 'cycles' de
-    pasada. Sin ese peso, la clasificación se va con cualquier palabra suelta.
+    c = C.CriterioDeGenero()
+    assert c.camara_maxima_px > 0
+    assert c.plano_minimo_s > 0
+    assert 0 < c.fija_minima <= 1
+    assert c.sujeto_minimo > 0
+
+
+def test_una_panoramica_no_es_del_genero():
+    m = E.MedidaEstilo(camara_px=6.0, fraccion_camara_fija=0.1,
+                       duracion=5.0, sujeto_residual=2.0)
+    ok, motivo = C.CriterioDeGenero().juzga(m)
+    assert not ok
+    assert "cámara se mueve" in motivo
+
+
+def test_una_foto_larga_tampoco_es_del_genero():
+    """Un plano donde NADA se mueve no es cine de cámara fija: es una foto.
+
+    Y enseñarle fotos a un modelo de vídeo es la forma más eficiente de que
+    aprenda a no mover nada — el fallo se vería al final del entrenamiento,
+    que es el peor momento posible para descubrirlo.
     """
-    psp, _ = corpora
-    gpu_files = [e.path for e in psp.files_for("gpu")]
-    assert any("GPU/" in f for f in gpu_files)
+    m = E.MedidaEstilo(camara_px=0.0, fraccion_camara_fija=1.0,
+                       duracion=8.0, sujeto_residual=0.01)
+    ok, motivo = C.CriterioDeGenero().juzga(m)
+    assert not ok
+    assert "foto larga" in motivo
 
 
-def test_classifies_hle_and_frontend(corpora):
-    psp, _ = corpora
-    assert "hle_sistema" in psp.subsystems
-    assert "frontend" in psp.subsystems
-    assert any("sceKernel" in e.path or "HLE" in e.path
-               for e in psp.files_for("hle_sistema"))
+def test_un_plano_corto_no_entra():
+    m = E.MedidaEstilo(camara_px=0.1, fraccion_camara_fija=1.0,
+                       duracion=0.9, sujeto_residual=1.0)
+    ok, motivo = C.CriterioDeGenero().juzga(m)
+    assert not ok and "dura" in motivo
 
 
-def test_every_rule_has_a_name_and_description():
-    from vmagi.modules.reverse.corpus import RULES
-    names = subsystem_names()
-    assert len(names) == len(set(names)), "subsistemas duplicados"
-    assert all(r.description for r in RULES)
+def test_un_plano_que_empieza_fijo_y_acaba_moviendose_se_caza():
+    """La mediana engaña; la fracción de pares quietos no.
 
-
-def test_skips_vendored_and_build_dirs(tmp_path):
-    root = tmp_path / "emu"
-    (root / "src").mkdir(parents=True)
-    (root / "src" / "cpu.cpp").write_text("case 0x01: opcode(x);", encoding="utf-8")
-    for skipped in ("third_party", "build", "node_modules"):
-        d = root / skipped
-        d.mkdir()
-        (d / "enorme.cpp").write_text("x\n" * 5000, encoding="utf-8")
-
-    idx = index_source_tree(root)
-    assert idx.total_files == 1, "no debe contar dependencias ni artefactos"
-
-
-def test_ignores_non_source_files(tmp_path):
-    root = tmp_path / "e"
-    root.mkdir()
-    (root / "a.cpp").write_text("case 0x01:", encoding="utf-8")
-    (root / "README.md").write_text("x" * 1000, encoding="utf-8")
-    (root / "icono.png").write_bytes(b"\x89PNG" + bytes(500))
-    assert index_source_tree(root).total_files == 1
-
-
-def test_not_a_directory():
-    with pytest.raises(NotADirectoryError):
-        index_source_tree(__file__)
-
-
-def test_binary_garbage_does_not_crash(tmp_path):
-    root = tmp_path / "e"
-    root.mkdir()
-    (root / "raro.cpp").write_bytes(bytes(range(256)) * 50)
-    idx = index_source_tree(root)
-    assert idx.total_files == 1
-
-
-# --------------------------------------------------------------- localizar
-
-def test_locate_subsystem_cites_real_files(corpora):
-    psp, _ = corpora
-    out = locate_subsystem(psp, "dynarec")
-    assert "líneas" in out
-    assert ".cpp" in out
-    assert "total del subsistema" in out
-
-
-def test_locate_reports_signals(corpora):
-    psp, _ = corpora
-    out = locate_subsystem(psp, "gpu")
-    assert "señales:" in out
-
-
-def test_locate_unknown_subsystem_lists_what_exists(corpora):
-    psp, _ = corpora
-    out = locate_subsystem(psp, "inventado")
-    assert "No se localizó" in out and "Subsistemas detectados" in out
-
-
-# --------------------------------------------------------------- comparar
-
-def test_comparison_uses_real_line_counts(corpora):
-    psp, nds = corpora
-    out = compare_corpora(psp, nds).render()
-    assert "PPSSPP" in out and "melonDS" in out
-    assert "dynarec" in out
-    assert "total" in out
-
-
-def test_comparison_flags_where_the_work_is(corpora):
+    Es justo el caso que un umbral solo sobre `camara_px` dejaría pasar: la
+    mitad del plano quieta arrastra la mediana hacia abajo aunque la otra
+    mitad sea una panorámica.
     """
-    El dynarec de melonDS-like tiene ~5x más líneas: la lectura debe decirlo,
-    porque es trabajo que la tabla de consolas no muestra.
+    m = E.MedidaEstilo(camara_px=0.9, fraccion_camara_fija=0.5,
+                       duracion=6.0, sujeto_residual=1.0)
+    ok, motivo = C.CriterioDeGenero().juzga(m)
+    assert not ok
+    assert "quieto" in motivo
+
+
+def test_sin_medida_de_camara_no_se_acepta_por_omision():
+    """La quinta regla del proyecto, también aquí: «no lo he podido medir»
+    no es «cumple». Un clip que entra sin haberse mirado envenena el corpus
+    exactamente igual que uno que se midió y estaba mal."""
+    m = E.MedidaEstilo(camara_px=None, duracion=6.0)
+    ok, motivo = C.CriterioDeGenero().juzga(m)
+    assert not ok
+    assert "no se pudo medir" in motivo
+
+
+# ================================================= el minado
+
+@sin_ffmpeg
+@sin_numpy
+async def test_mina_material_del_genero(del_genero, tmp_path):
+    c = await C.mina(del_genero, tmp_path / "corpus")
+    assert isinstance(c, C.Corpus), (
+        "el minero devuelve siempre el mismo tipo, también cuando no acepta "
+        "nada: dos contratos de salida según el resultado obligan al llamador "
+        "a adivinar")
+    assert c.aceptados, c.render()
+    assert c.segundos > 0
+    for clip in c.aceptados:
+        assert isinstance(clip, C.Clip)
+        assert Path(clip.ruta).exists()
+        assert clip.duracion >= C.CLIP_MINIMO_S
+        # La etiqueta ES la medida. Sin ella el clip es un fichero suelto.
+        assert clip.medida.get("camara_px") is not None
+        assert clip.medida.get("aspecto") is not None
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_el_material_de_otro_genero_se_rechaza_entero(de_otro_genero,
+                                                            tmp_path):
+    """Y esto es lo que hace que sea un corpus y no una carpeta.
+
+    Un plano con panorámica no es un ejemplo malo del género: es un ejemplo
+    de OTRO género, y meterlo enseña justamente lo que no se quiere.
     """
-    psp, nds = corpora
-    out = compare_corpora(psp, nds).render()
-    assert "Lectura:" in out
-    assert "dynarec" in out.split("Lectura:")[1]
+    c = await C.mina(de_otro_genero, tmp_path / "corpus2")
+    assert not c.aceptados, (
+        f"aceptó material de panorámica en un corpus de cámara fija: "
+        f"{c.render()}")
+    assert c.rechazados
+    assert any("cámara" in r.motivo for r in c.rechazados)
+    # Y lo dice, en vez de dejar una carpeta vacía sin explicación.
+    assert "CERO clips aceptados" in c.render()
 
 
-def test_comparison_notes_missing_subsystems(tmp_path):
-    a = _make_emulator(tmp_path, "con_audio", {
-        "src/SPU.cpp": "// ADPCM mixer sample_rate\n" + "x\n" * 100})
-    b = _make_emulator(tmp_path, "sin_audio", {
-        "src/gpu.cpp": "// rasteriz texture shader\n" + "y\n" * 100})
-    out = compare_corpora(index_source_tree(a, name="A"),
-                          index_source_tree(b, name="B")).render()
-    assert "solo A" in out or "solo B" in out
+@sin_ffmpeg
+@sin_numpy
+async def test_lo_rechazado_se_declara_con_su_motivo(de_otro_genero, tmp_path):
+    """Un corpus que no dice qué tiró es un corpus del que no se puede
+    aprender por qué salió mal el modelo."""
+    c = await C.mina(de_otro_genero, tmp_path / "corpus3")
+    texto = c.render()
+    assert "rechazados, por qué" in texto
+    # Y la medida del rechazado se conserva aunque el fichero se borre: es la
+    # única prueba de por qué se tiró.
+    for r in c.rechazados:
+        assert r.motivo
+        if r.medida:
+            assert not Path(r.ruta or "no-existe").exists()
 
 
-# ---------------------------------------------------------------- cableado
+@sin_ffmpeg
+@sin_numpy
+async def test_el_manifiesto_es_jsonl_legible(del_genero, tmp_path):
+    """Una línea por clip, no un JSON único.
 
-def test_corpus_tools_are_in_the_catalog():
-    names = set(build_registry().names())
-    for t in ("index_emulator", "locate_subsystem", "compare_emulators"):
-        assert t in names, f"{t} no está conectado al enjambre"
-
-
-@pytest.mark.asyncio
-async def test_tools_end_to_end(tmp_path):
-    _make_emulator(tmp_path, "EmuA", PSP_LIKE)
-    _make_emulator(tmp_path, "EmuB", NDS_LIKE)
-    ctx = ToolContext(task_id="t", cwd=tmp_path,
-                      journal=WriteJournal("t", tmp_path / ".j"))
-    reg = build_registry()
-
-    r = await reg.execute("index_emulator", {"path": "EmuA", "name": "EmuA"}, ctx)
-    assert r.ok and r.meta["files"] == len(PSP_LIKE)
-
-    r = await reg.execute("locate_subsystem",
-                          {"emulator": "EmuA", "subsystem": "dynarec"}, ctx)
-    assert r.ok and ".cpp" in r.content
-
-    # comparar antes de indexar el segundo debe avisar, no fallar en silencio
-    r = await reg.execute("compare_emulators", {"a": "EmuA", "b": "EmuB"}, ctx)
-    assert not r.ok and "sin indexar" in r.error
-
-    await reg.execute("index_emulator", {"path": "EmuB", "name": "EmuB"}, ctx)
-    r = await reg.execute("compare_emulators", {"a": "EmuA", "b": "EmuB"}, ctx)
-    assert r.ok and "Lectura:" in r.content
-
-
-@pytest.mark.asyncio
-async def test_indexing_a_non_repo_says_so(tmp_path):
-    (tmp_path / "vacio").mkdir()
-    ctx = ToolContext(task_id="t", cwd=tmp_path,
-                      journal=WriteJournal("t", tmp_path / ".j"))
-    r = await build_registry().execute(
-        "index_emulator", {"path": "vacio"}, ctx)
-    assert not r.ok and "código fuente" in r.error
-
-
-def test_arch_backend_dirs_are_dynarec_not_interpreter(corpora):
+    Un corpus de miles de clips se lee en streaming durante el
+    entrenamiento, y cargar el fichero entero para sacar el ejemplo 4.312 es
+    el detalle que convierte «entrenar» en «esperar».
     """
-    Encontrado en la demo: Core/MIPS/x86/CompALU.cpp salía como intérprete
-    porque "core/mips" coincidía con el patrón de CPU. En PPSSPP ese fichero ES
-    el dynarec — los backends de emisión viven bajo un directorio de
-    arquitectura dentro del de CPU.
+    c = await C.mina(del_genero, tmp_path / "corpus4")
+    man = Path(c.manifiesto)
+    assert man.exists()
+    lineas = [x for x in man.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert len(lineas) == c.total
+    for linea in lineas:
+        d = json.loads(linea)          # cada línea, JSON válida por sí sola
+        assert "aceptado" in d and "medida" in d
+
+    releido = C.lee_manifiesto(man)
+    assert len(releido) == c.total
+    assert sum(1 for x in releido if x.aceptado) == len(c.aceptados)
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_dos_pasadas_dan_el_mismo_corpus(del_genero, tmp_path):
+    """Lo mínimo exigible a un conjunto de entrenamiento.
+
+    Uno que cambia entre corridas hace que ninguna comparación entre modelos
+    signifique nada: no se sabría si mejoró el modelo o cambió el examen. Es
+    la misma exigencia que el proyecto ya le pone al troceo de subagentes y
+    al propio medidor.
     """
-    psp, _ = corpora
-    dynarec = [e.path for e in psp.files_for("dynarec")]
-    assert any("CompALU" in f for f in dynarec), (
-        f"CompALU.cpp debe ser dynarec, no intérprete. dynarec={dynarec}")
-    interp = [e.path for e in psp.files_for("cpu_interprete")]
-    assert any("MIPSInt" in f for f in interp), "el intérprete real sigue ahí"
-    assert not any("x86" in f for f in interp)
+    a = await C.mina(del_genero, tmp_path / "c_a")
+    b = await C.mina(del_genero, tmp_path / "c_b")
+    assert len(a.aceptados) == len(b.aceptados)
+    assert len(a.rechazados) == len(b.rechazados)
+    # `strict=True` y no por complacer al linter: si las dos pasadas dieran
+    # listas de distinta longitud, un `zip` normal recorrería la corta y el
+    # test pasaría habiendo comprobado la mitad. Justo el determinismo que
+    # este test existe para vigilar se escaparía en silencio.
+    for x, y in zip(a.aceptados, b.aceptados, strict=True):
+        assert (x.inicio, x.fin) == (y.inicio, y.fin)
+        assert x.medida.get("camara_px") == y.medida.get("camara_px")
+        assert x.medida.get("saturacion") == y.medida.get("saturacion")
+
+
+@sin_ffmpeg
+async def test_un_fichero_que_no_existe_no_revienta(tmp_path):
+    c = await C.mina(tmp_path / "no-existe.mp4", tmp_path / "c")
+    assert not c.aceptados and c.aviso
+    assert "no existe" in c.aviso[0]
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_el_tope_se_respeta_y_se_avisa(del_genero, tmp_path):
+    c = await C.mina(del_genero, tmp_path / "c_tope", tope=1)
+    assert len(c.aceptados) + len(c.rechazados) <= 1
+    if c.aviso:
+        assert any("tope" in a for a in c.aviso)
+
+
+# ================================================= alcanzable
+
+def test_el_minero_esta_en_el_registro_del_enjambre():
+    from vmagi.core.tools.registry import ToolRegistry
+    from vmagi.modules.studio.tools import register_studio_tools
+
+    reg = register_studio_tools(ToolRegistry())
+    t = reg.get("minar_corpus")
+    assert t is not None, "el enjambre no puede curar su propio corpus"
+    assert "write" in (t.access or set())
+    assert t.dangerous is True
