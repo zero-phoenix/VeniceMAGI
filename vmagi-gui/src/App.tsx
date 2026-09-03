@@ -286,12 +286,19 @@ export default function App() {
   return (
     <>
       <div className="tt">
-        <b>MAGI SYSTEM IDE</b> — ejecutable de escritorio. Interfaz horizontal fija.
+        <b>VeniceMAGI</b> — enjambre dialéctico sobre proveedores guest, sin cuenta ni clave.
       </div>
 
       <div className="bar">
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <span className="brand">MAGI SYSTEM IDE {connected ? "[EN LÍNEA]" : "[DESCONECTADO]"}</span>
+          {/* Se llamaba «MAGI SYSTEM IDE», que es el nombre del otro proyecto.
+              Un programa que se presenta con el nombre de su antecesor no se
+              distingue de él ni en la ventana ni en la barra de tareas. */}
+          <span className="brand">VeniceMAGI</span>
+          <span className={`pill ${connected ? "ok" : "fallo"}`}
+                style={{ marginLeft: "8px" }}>
+            {connected ? "en línea" : "desconectado"}
+          </span>
         </div>
         <div className="q">
           {/* Los dos selectores no decían qué hacen: "MOTOR: Inferencia
@@ -426,10 +433,10 @@ export default function App() {
           </div>
 
           <div className="tri" style={{ paddingBottom: "10px" }}>
-            <div className="nd b" style={{ backgroundColor: balthasarColor || undefined }}>
+            <div className="nd b" data-rol="BALTHASAR" data-activo={balthasarColor ? "si" : "no"}>
               <div className="fx">el que busca fallos</div>
               <div className="nm">BALTHASAR · 2</div>
-              <div className="md" style={{ color: balthasarColor ? '#000' : 'var(--ink)' }}>{balthasarData.provider} · {balthasarData.latency}</div>
+              <div className="md">{balthasarData.provider} · {balthasarData.latency}</div>
             </div>
             <div className="cn k1"></div>
             <div className="cn k2"></div>
@@ -437,15 +444,15 @@ export default function App() {
               <div className="lg">MAGI</div>
               <div className="r">ENJAMBRE ACTIVO</div>
             </div>
-            <div className={`nd c ${isCasperThinking ? 'blinking' : ''}`} style={{ backgroundColor: casperColor || undefined }}>
+            <div className={`nd c ${isCasperThinking ? 'blinking' : ''}`} data-rol="CASPER" data-activo={casperColor ? "si" : "no"}>
               <div className="fx">el que decide</div>
               <div className="nm">CASPER · 3</div>
-              <div className="md" style={{ color: casperColor ? '#000' : 'var(--ink)' }}>{casperData.provider} · {casperData.latency}</div>
+              <div className="md">{casperData.provider} · {casperData.latency}</div>
             </div>
-            <div className="nd m1" style={{ backgroundColor: melchiorColor || undefined }}>
+            <div className="nd m1" data-rol="MELCHIOR" data-activo={melchiorColor ? "si" : "no"}>
               <div className="fx">el que propone</div>
               <div className="nm">MELCHIOR · 1</div>
-              <div className="md" style={{ color: melchiorColor ? '#000' : 'var(--ink)' }}>{melchiorData.provider} · {melchiorData.latency}</div>
+              <div className="md">{melchiorData.provider} · {melchiorData.latency}</div>
             </div>
           </div>
 
@@ -847,7 +854,7 @@ export default function App() {
 
       <div className="foot">
         <div>
-          ejecutable de escritorio · <b>MAGI SYSTEM IDE v3.0</b> · layout maestro
+          <b>VeniceMAGI</b> · cinco opiniones y un instrumento de medida
         </div>
         <div>acceso root habilitado</div>
       </div>

@@ -1,17 +1,25 @@
 :root {
-  --bg: #000;
-  --sf: #0A0E0E;
-  --node: #5BC5E0;
-  --dim: #2E6D7D;
-  --acc: #F08000;
-  --acc2: #FFA733;
-  --ink: #000;
-  --txt: #F5A65B;
-  --ok: #39FF7A;
-  --warn: #FFC400;
-  --dang: #FF2D2D;
-  --und: #8A8F98;
-  --gr: #1A2A2E;
+  /* ALIAS, NO UNA SEGUNDA PALETA.
+   *
+   * Los nombres cortos de aquí (--sf, --gr, --acc...) los usan mil reglas de
+   * este fichero y renombrarlos una por una sería un `sed` con riesgo y sin
+   * ganancia. Se quedan, pero dejan de tener valores propios: ahora apuntan a
+   * los tokens de `theme/magi.css`. Un solo sitio decide los colores.
+   *
+   * `--ok`, `--ink` y compañía NO se redefinen aquí a propósito: caen a los
+   * del sistema. Tener dos definiciones del mismo nombre en dos ficheros es
+   * exactamente cómo un tema se desincroniza del otro sin que nadie lo note. */
+  --bg:   var(--paper);
+  --sf:   var(--surface);
+  --node: var(--naoko);
+  --dim:  var(--rule-fuerte);
+  --acc:  var(--naoko);
+  --acc2: var(--casper);
+  --txt:  var(--ink);
+  --warn: var(--aviso);
+  --dang: var(--fallo);
+  --und:  var(--incognita);
+  --gr:   var(--rule);
 }
 
 * {
@@ -32,21 +40,7 @@ html, body {
   overflow: hidden;
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--dim);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--node);
-}
+/* Las barras de scroll las define theme/magi.css. */
 
 html, body, #root {
   height: 100vh;
@@ -57,21 +51,19 @@ html, body, #root {
 }
 
 body {
-  background: var(--bg);
-  color: #cfe0e4;
-  font: 13px/1.45 Inter, system-ui, "Segoe UI", sans-serif;
-  padding: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--t-base)/1.5 var(--sans);
+  padding: var(--e2);
   display: flex;
   flex-direction: column;
 }
 
-.mono {
-  font-family: "JetBrains Mono", ui-monospace, Consolas, monospace;
-}
+.mono { font-family: var(--mono); }
 
 .tt {
   font-size: 12px;
-  color: #7a8a90;
+  color: var(--muted);
   margin-bottom: 4px;
   flex: 0 0 auto;
 }
@@ -117,7 +109,7 @@ body {
 }
 
 .secs button {
-  background: #000;
+  background: var(--surface);
   color: var(--txt);
   border: 0;
   padding: 3px 12px;
@@ -128,7 +120,7 @@ body {
 
 .secs button.on {
   background: var(--node);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
 }
 
@@ -136,7 +128,7 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
-  color: #8fa4aa;
+  color: var(--muted);
 }
 
 .q b {
@@ -146,7 +138,7 @@ body {
 
 .stop {
   background: var(--dang);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
   padding: 2px 9px;
   font-size: 10.5px;
@@ -181,7 +173,7 @@ body {
 .lbl {
   font-size: 9px;
   letter-spacing: .14em;
-  color: #5f7378;
+  color: var(--muted);
   margin: 7px 0 2px;
 }
 
@@ -194,13 +186,13 @@ body {
 }
 
 .th.on {
-  background: #0d1e22;
+  background: var(--sunk);
   border-left-color: var(--acc);
 }
 
 .th small {
   display: block;
-  color: #5f7378;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -257,7 +249,7 @@ body {
   font-weight: 800;
   opacity: .6;
   text-transform: uppercase;
-  color: #000 !important;
+  color: var(--sobre-color) !important;
 }
 
 .nd .nm {
@@ -309,7 +301,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #000;
+  background: var(--surface);
 }
 
 .rh .lg {
@@ -360,7 +352,7 @@ body {
 .you {
   align-self: flex-end;
   max-width: 76%;
-  background: #0d1e22;
+  background: var(--sunk);
   border: 1px solid var(--dim);
   padding: 6px 9px;
   overflow-wrap: anywhere;
@@ -369,7 +361,7 @@ body {
 .you .w {
   font-size: 9px;
   letter-spacing: .1em;
-  color: #6d8288;
+  color: var(--muted);
 }
 
 .card {
@@ -398,11 +390,11 @@ body {
 
 .mid {
   margin: 5px 9px 0;
-  border: 1px solid #24363b;
-  background: #050c0e;
+  border: 1px solid var(--rule);
+  background: var(--sunk);
   padding: 4px 7px;
   font-size: 10px;
-  color: #8fb6c2;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 
@@ -415,7 +407,7 @@ body {
   padding: 6px 9px 2px;
   font-size: 12.5px;
   font-style: italic;
-  color: #dceef2;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 
@@ -423,9 +415,9 @@ body {
   margin: 0 9px;
   padding: 2px 0;
   font-size: 11.5px;
-  color: #8fb6c2;
+  color: var(--muted);
   cursor: pointer;
-  border-bottom: 1px dotted #16262a;
+  border-bottom: 1px dotted var(--rule);
 }
 
 .sec:before {
@@ -436,7 +428,7 @@ body {
 .ft {
   padding: 3px 9px 6px;
   font-size: 9.5px;
-  color: #5f7378;
+  color: var(--muted);
 }
 
 .prop {
@@ -453,17 +445,17 @@ body {
 
 .wait {
   border: 1px dashed var(--warn);
-  background: #151002;
+  background: var(--sunk);
   padding: 6px 9px;
   font-size: 11.5px;
-  color: #e8d9a8;
+  color: var(--ritsuko);
 }
 
 /* composer */
 .comp {
   flex: 0 0 auto;
   border-top: 1px solid var(--gr);
-  background: #050809;
+  background: var(--sunk);
   padding: 7px 9px;
 }
 
@@ -474,7 +466,7 @@ body {
 }
 
 .pre {
-  background: #000;
+  background: var(--surface);
   border: 1px solid var(--acc);
   color: var(--acc2);
   padding: 6px 7px;
@@ -487,9 +479,9 @@ body {
 .pf {
   flex: 1;
   min-width: 0;
-  background: #050a0b;
+  background: var(--sunk);
   border: 1px solid var(--acc);
-  color: #e6f2f5;
+  color: var(--ink);
   padding: 6px 9px;
   font: inherit;
   font-size: 12.5px;
@@ -499,7 +491,7 @@ body {
 }
 
 .bt {
-  background: #000;
+  background: var(--surface);
   border: 1px solid var(--acc);
   color: var(--acc);
   padding: 7px 9px;
@@ -511,7 +503,7 @@ body {
 
 .bt.go {
   background: var(--acc);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
   padding: 7px 14px;
 }
@@ -531,7 +523,7 @@ body {
   align-items: center;
   gap: 4px;
   border: 1px solid var(--gr);
-  background: #081215;
+  background: var(--sunk);
   padding: 2px 6px;
   white-space: nowrap;
   flex: 0 0 auto;
@@ -565,7 +557,7 @@ body {
 .tab {
   padding: 4px 9px;
   font-size: 10.5px;
-  color: #6d8288;
+  color: var(--muted);
   border-right: 1px solid var(--gr);
   cursor: pointer;
   white-space: nowrap;
@@ -573,7 +565,7 @@ body {
 
 .tab.on {
   background: var(--node);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
 }
 
@@ -592,7 +584,7 @@ body {
   padding: 3px 0 3px 20px;
   position: relative;
   font-size: 11.5px;
-  border-bottom: 1px solid #101c1f;
+  border-bottom: 1px solid var(--sunk);
   overflow-wrap: anywhere;
 }
 
@@ -614,18 +606,18 @@ body {
 
 .plan li.w:before {
   content: "○";
-  color: #4a5f65;
+  color: var(--muted);
 }
 
 .plan li small {
   display: block;
-  color: #5f7378;
+  color: var(--muted);
   font-size: 10px;
 }
 
 .pv {
   border: 1px solid var(--gr);
-  background: #000;
+  background: var(--surface);
   height: 126px;
   position: relative;
   overflow: hidden;
@@ -636,11 +628,11 @@ body {
   image-rendering: pixelated;
   width: 100%;
   height: 100%;
-  background: linear-gradient(#0f380f, #0f380f) 0 96% / 100% 12% no-repeat,
-    linear-gradient(#8bac0f, #8bac0f) 22% 74% / 16% 6% no-repeat,
-    linear-gradient(#8bac0f, #8bac0f) 54% 56% / 14% 6% no-repeat,
-    linear-gradient(#9bbc0f, #9bbc0f) 30% 84% / 5% 9% no-repeat,
-    #306230;
+  background: linear-gradient(var(--sunk), var(--sunk)) 0 96% / 100% 12% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 22% 74% / 16% 6% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 54% 56% / 14% 6% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 30% 84% / 5% 9% no-repeat,
+    var(--rule);
 }
 
 .mrow {
@@ -648,12 +640,12 @@ body {
   justify-content: space-between;
   font-size: 10.5px;
   padding: 2px 0;
-  border-bottom: 1px dotted #16262a;
+  border-bottom: 1px dotted var(--rule);
 }
 
 .mrow b {
   font-weight: 400;
-  color: #8fa4aa;
+  color: var(--muted);
 }
 
 .ok {
@@ -681,7 +673,7 @@ body {
 }
 
 .pre {
-  background: #000;
+  background: var(--surface);
   border: 1px solid var(--acc);
   color: var(--acc2);
   padding: 6px 7px;
@@ -694,9 +686,9 @@ body {
 .pf {
   flex: 1;
   min-width: 0;
-  background: #050a0b;
+  background: var(--sunk);
   border: 1px solid var(--acc);
-  color: #e6f2f5;
+  color: var(--ink);
   padding: 6px 9px;
   font: inherit;
   font-size: 12.5px;
@@ -706,7 +698,7 @@ body {
 }
 
 .bt {
-  background: #000;
+  background: var(--surface);
   border: 1px solid var(--acc);
   color: var(--acc);
   padding: 7px 9px;
@@ -718,7 +710,7 @@ body {
 
 .bt.go {
   background: var(--acc);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
   padding: 7px 14px;
 }
@@ -738,7 +730,7 @@ body {
   align-items: center;
   gap: 4px;
   border: 1px solid var(--gr);
-  background: #081215;
+  background: var(--sunk);
   padding: 2px 6px;
   white-space: nowrap;
   flex: 0 0 auto;
@@ -772,7 +764,7 @@ body {
 .tab {
   padding: 4px 9px;
   font-size: 10.5px;
-  color: #6d8288;
+  color: var(--muted);
   border-right: 1px solid var(--gr);
   cursor: pointer;
   white-space: nowrap;
@@ -780,7 +772,7 @@ body {
 
 .tab.on {
   background: var(--node);
-  color: #000;
+  color: var(--sobre-color);
   font-weight: 800;
 }
 
@@ -799,7 +791,7 @@ body {
   padding: 3px 0 3px 20px;
   position: relative;
   font-size: 11.5px;
-  border-bottom: 1px solid #101c1f;
+  border-bottom: 1px solid var(--sunk);
   overflow-wrap: anywhere;
 }
 
@@ -821,18 +813,18 @@ body {
 
 .plan li.w:before {
   content: "○";
-  color: #4a5f65;
+  color: var(--muted);
 }
 
 .plan li small {
   display: block;
-  color: #5f7378;
+  color: var(--muted);
   font-size: 10px;
 }
 
 .pv {
   border: 1px solid var(--gr);
-  background: #000;
+  background: var(--surface);
   height: 126px;
   position: relative;
   overflow: hidden;
@@ -843,11 +835,11 @@ body {
   image-rendering: pixelated;
   width: 100%;
   height: 100%;
-  background: linear-gradient(#0f380f, #0f380f) 0 96% / 100% 12% no-repeat,
-    linear-gradient(#8bac0f, #8bac0f) 22% 74% / 16% 6% no-repeat,
-    linear-gradient(#8bac0f, #8bac0f) 54% 56% / 14% 6% no-repeat,
-    linear-gradient(#9bbc0f, #9bbc0f) 30% 84% / 5% 9% no-repeat,
-    #306230;
+  background: linear-gradient(var(--sunk), var(--sunk)) 0 96% / 100% 12% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 22% 74% / 16% 6% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 54% 56% / 14% 6% no-repeat,
+    linear-gradient(var(--melchior), var(--melchior)) 30% 84% / 5% 9% no-repeat,
+    var(--rule);
 }
 
 .mrow {
@@ -855,12 +847,12 @@ body {
   justify-content: space-between;
   font-size: 10.5px;
   padding: 2px 0;
-  border-bottom: 1px dotted #16262a;
+  border-bottom: 1px dotted var(--rule);
 }
 
 .mrow b {
   font-weight: 400;
-  color: #8fa4aa;
+  color: var(--muted);
 }
 
 .ok {
@@ -879,7 +871,7 @@ body {
   flex: 0 0 auto;
   margin-top: 6px;
   font-size: 10.5px;
-  color: #6d8288;
+  color: var(--muted);
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -894,7 +886,7 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #050a0b;
+  background: var(--sunk);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--gr);
@@ -917,7 +909,7 @@ body {
   gap: 10px;
   scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: var(--acc) #050a0b;
+  scrollbar-color: var(--acc) var(--sunk);
   box-sizing: border-box;
   width: 100%;
   user-select: text;
@@ -930,14 +922,14 @@ body {
 }
 
 .conv::-webkit-scrollbar-track {
-  background: #050a0b !important;
+  background: var(--sunk) !important;
   border-left: 1px solid var(--gr);
 }
 
 .conv::-webkit-scrollbar-thumb {
   background: var(--acc) !important;
   border-radius: 4px;
-  border: 2px solid #050a0b;
+  border: 2px solid var(--sunk);
 }
 
 .conv::-webkit-scrollbar-thumb:hover {
@@ -949,7 +941,7 @@ body {
   font-weight: 400 !important;
   font-size: 13px !important;
   line-height: 1.55 !important;
-  color: #cfe0e4 !important;
+  color: var(--ink) !important;
 }
 
 .card-body p, .card-body span, .card-body li {
@@ -957,7 +949,7 @@ body {
   font-weight: 400 !important;
   font-size: 13px !important;
   line-height: 1.55 !important;
-  color: #cfe0e4 !important;
+  color: var(--ink) !important;
   margin-bottom: 6px !important;
 }
 
@@ -970,7 +962,7 @@ body {
 
 .card-body strong, .card-body b {
   font-weight: 700 !important;
-  color: #ffffff !important;
+  color: var(--surface) !important;
 }
 
 .comp {
@@ -994,7 +986,7 @@ body {
 .tool-agent { color: var(--dim); min-width: 72px; }
 .tool-name { color: var(--acc); }
 .tool-run { color: var(--dim); font-style: italic; }
-.tool-ok { color: #7ddc7d; }
+.tool-ok { color: var(--ok); }
 .tool-err { color: var(--dang); }
 
 
@@ -1002,11 +994,202 @@ body {
 .alerts { margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
 .alert { display: flex; align-items: center; gap: 8px; font-size: 10px;
          padding: 5px 8px; background: rgba(255,180,60,0.10);
-         border-left: 2px solid #e0a44a; }
+         border-left: 2px solid var(--ritsuko); }
 .alert.crit { background: rgba(255,70,70,0.12); border-left-color: var(--dang); }
-.alert-kind { color: #e0a44a; text-transform: uppercase; min-width: 84px;
+.alert-kind { color: var(--ritsuko); text-transform: uppercase; min-width: 84px;
               font-weight: bold; }
 .alert.crit .alert-kind { color: var(--dang); }
-.alert-detail { flex: 1; color: #ddd; }
+.alert-detail { flex: 1; color: var(--ink-suave); }
 .alert-x { background: none; border: none; color: var(--dim); cursor: pointer;
            font-size: 13px; padding: 0 4px; }
+
+/* ============================================================================
+   TARJETA DE INTERVENCIÓN · el elemento que más se repite en pantalla
+   ============================================================================
+   Aquí vive TODO el aspecto de la tarjeta. Antes estaba repartido en estilos
+   incrustados dentro del TSX, con dos referencias a variables inexistentes
+   —`--var` y `--fn`— que dejaban el nombre del nodo sin color sin que saltara
+   ningún error. Un color que se decide en TypeScript no se puede cambiar
+   desde el tema, y uno mal escrito no falla: simplemente no se ve.
+   ========================================================================= */
+
+.msg-card {
+  --rol: var(--muted);              /* quien no declara rol, no se tiñe */
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  /* La identidad va en una FRANJA a la izquierda, no en el borde entero.
+     Un recuadro de color alrededor de cada mensaje convierte una conversación
+     de veinte turnos en una bandera; una franja se lee de reojo en la columna
+     y deja el resto del borde neutro. */
+  border-left: 3px solid var(--rol);
+  border-radius: var(--radio);
+  margin-bottom: var(--e3);
+  overflow: hidden;
+  width: 100%;
+  flex: 0 0 auto;
+  box-shadow: var(--sombra);
+}
+
+.msg-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) var(--e3);
+  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
+}
+
+.card-quien { display: flex; gap: var(--e2); align-items: baseline; min-width: 0; }
+
+.card-agente {
+  color: var(--rol);
+  font-weight: 600;
+  font-size: var(--t-menor);
+  letter-spacing: .04em;
+}
+
+.card-papel {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.card-meta {
+  display: flex;
+  gap: var(--e3);
+  align-items: baseline;
+  font-size: var(--t-micro);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.card-latencia { color: var(--ink-suave); }
+
+.msg-card .card-body {
+  padding: var(--e3);
+  font-size: var(--t-base);
+  line-height: 1.55;
+  color: var(--ink);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.card-conclusion-text { color: var(--ink); }
+.card-conclusion-text > :last-child { margin-bottom: 0; }
+
+/* El botón de desplegar: texto, no botón. Un control secundario que se pinta
+   como botón compite con el contenido, y en esta pantalla el contenido es lo
+   único que importa. */
+.card-mas {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-top: var(--e2);
+  color: var(--rol);
+  font: 600 var(--t-pie)/1.4 var(--sans);
+  cursor: pointer;
+}
+.card-mas:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+.card-body-text {
+  margin-top: var(--e2);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--rule);
+  color: var(--ink-suave);
+}
+
+/* ------------------------------------------------------------- la cabecera */
+.brand {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: var(--t-mayor);
+  letter-spacing: -.01em;
+}
+/* La «V» en índigo: una letra teñida basta para marcar identidad. Un logotipo
+   entero de color en la cabecera compite con los cinco tonos de los roles,
+   que son los que de verdad tienen que destacar. */
+.brand::first-letter { color: var(--naoko); }
+
+/* ============================================================================
+   LOS TRES NODOS · aquí es donde el color dice quién habla
+   ============================================================================
+   Antes, el fondo de cada nodo se decidía en TypeScript con un
+   `style={{ backgroundColor: casperColor || undefined }}` y el texto de encima
+   se ponía en `#000`. Dos problemas: el color dejaba de ser gobernable desde
+   el tema, y el negro sobre un papel claro se volvió negro sobre casi blanco
+   en cuanto la interfaz dejó de ser oscura.
+
+   Ahora el nodo declara QUIÉN es (`data-rol`) y si está activo
+   (`data-activo`). El CSS decide cómo se pinta cada estado. El primer efecto
+   es que la pantalla deja de ser monocroma: tres tonos distintos en la fila
+   superior dicen de un vistazo cuál de los tres está trabajando.
+   ========================================================================= */
+
+.nd {
+  background: var(--surface) !important;
+  border: 1px solid var(--rule) !important;
+  border-top: 3px solid var(--rol) !important;
+  color: var(--ink) !important;
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+}
+
+.nd .nm { color: var(--rol) !important; font-weight: 600; letter-spacing: .03em; }
+.nd .fx { color: var(--muted) !important; }
+.nd .md { color: var(--ink-suave) !important; }
+
+/* Trabajando: el nodo se rellena con su tono y el texto pasa a claro. Es el
+   único momento en que un bloque grande lleva color, y por eso se ve desde el
+   otro lado de la mesa sin leer una palabra. */
+.nd[data-activo="si"] {
+  background: var(--rol) !important;
+  border-color: var(--rol) !important;
+}
+.nd[data-activo="si"] .nm,
+.nd[data-activo="si"] .fx,
+.nd[data-activo="si"] .md { color: var(--sobre-color) !important; }
+
+/* El rombo central del enjambre: estructura, no protagonista. */
+.rh { background: var(--surface); border: 1px solid var(--rule-fuerte); color: var(--ink); }
+.rh .lg { color: var(--ink); letter-spacing: .3em; font-weight: 600; }
+.cn, .k1, .k2 { background: var(--rule-fuerte); }
+
+/* ------------------------------------------------------- el índigo, contenido
+   `--acc` alimenta docenas de reglas heredadas, así que reencaminarlo al
+   índigo teñía media pantalla del mismo color y el sistema «un tono = un rol»
+   se venía abajo antes de empezar. Las superficies grandes vuelven a papel y
+   el índigo queda para lo que se PULSA, que es donde un color llama a la
+   acción en vez de decorar. */
+.tabs .tab { background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; }
+.tabs .tab:hover { color: var(--ink); }
+.tabs .tab.on, .tabs .tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--naoko);
+  background: transparent;
+}
+.you { background: var(--sunk); border-left: 3px solid var(--usuario); color: var(--ink); }
+.foot, .tt { color: var(--muted); }
+.foot b, .tt b { color: var(--ink); }
+
+
+/* Los nodos eran ilegibles al tamaño real: filete de 3 px sobre una tarjeta de
+   80 px de alto y el nombre en el mismo gris que todo lo demás. Se les da aire,
+   el nombre en su tono y un borde completo tenue del mismo color: a un metro
+   de la pantalla ya se distingue quién es quién sin leer. */
+.nd {
+  padding: var(--e2) var(--e3) !important;
+  border: 1px solid color-mix(in srgb, var(--rol) 45%, var(--rule)) !important;
+  border-top: 3px solid var(--rol) !important;
+  min-height: 58px;
+}
+.nd .nm { font-size: var(--t-menor) !important; }
+.nd .fx {
+  font-size: var(--t-micro) !important;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.nd .md { font-size: var(--t-micro) !important; font-family: var(--mono); }
+.rh .lg { font-size: var(--t-menor); }

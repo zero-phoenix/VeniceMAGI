@@ -1,31 +1,247 @@
+/* ============================================================================
+   VeniceMAGI · SISTEMA DE DISEÑO
+   ============================================================================
+
+   POR QUÉ SE TIRÓ EL ANTERIOR
+
+   Era el panel oscuro de siempre: negro casi puro (#030508), azul #3b82f6 y
+   naranja #f97316 —los dos por defecto de Tailwind— sobre Inter y JetBrains
+   Mono. Se parecía a cualquier otra herramienta, y sobre todo se parecía a un
+   terminal: la estética que este proyecto ya no es. VeniceMAGI dejó de ser un
+   REPL con adornos hace tiempo; es un instrumento de medida con cinco
+   opiniones dentro.
+
+   LA IDEA
+
+   Una sala tranquila, no una consola. Oscuro cálido, tinta clara, filetes
+   finísimos y aire entre las cosas. Se lee durante horas sin cansar y no
+   finge ser una nave espacial.
+
+   OSCURO SIEMPRE, Y SIN CONMUTADOR. Dos paletas son dos paletas que hay que
+   mantener sincronizadas, y la segunda siempre se queda atrás: al tercer
+   componente nuevo una de las dos tiene un color puesto a ojo. Se elige una
+   y se cuida.
+
+   LA REGLA QUE ORDENA TODO: EL COLOR SIGNIFICA
+
+   Cada uno de los cinco roles tiene UN tono y ningún otro elemento lo usa.
+   Nada más lleva color por gusto: ni bordes, ni cabeceras, ni botones. Si
+   algo está teñido, es porque pertenece a alguien o porque dice un estado.
+   Esa restricción es lo que hace que mirar la pantalla de reojo ya informe.
+
+   Y una decisión que no es estética sino de honestidad: **lo que no se ha
+   comprobado se pinta GRIS, nunca verde ni ámbar.** Todo este repositorio
+   está construido sobre que «no lo he comprobado» no es «está bien»; una
+   interfaz que pinte lo desconocido con color de éxito contradice al sistema
+   que muestra.
+
+   ACCESIBILIDAD
+
+   Los cinco tonos de rol están escogidos con ~4.5:1 contra el papel, y se
+   distinguen entre sí también por posición y por etiqueta: nadie tiene que
+   acertar el color para saber quién habla.
+   ========================================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
 :root {
-  /* T12 - Premium Design System */
-  --vmagi-bg: #030508;
-  --vmagi-surface: #0a0e14;
-  --vmagi-surface-hover: #131a26;
-  --vmagi-node: #3b82f6;
-  --vmagi-node-dim: #1e3a8a;
-  --vmagi-accent: #f97316;
-  --vmagi-accent-hi: #fb923c;
-  --vmagi-ink: #000000;
-  --vmagi-text: #e2e8f0;
-  --vmagi-text-dim: #94a3b8;
-  --vmagi-ok: #10b981;
-  --vmagi-warn: #eab308;
-  --vmagi-danger: #ef4444;
-  --vmagi-undecided: #64748b;
-  --vmagi-grid: rgba(255, 255, 255, 0.05);
-  --vmagi-glow-accent: rgba(249, 115, 22, 0.5);
-  --vmagi-glow-node: rgba(59, 130, 246, 0.5);
-  
-  --font-prose: "Inter", "Outfit", system-ui, sans-serif;
-  --font-code: "JetBrains Mono", "Fira Code", monospace;
+  /* --- superficie: OSCURO, y sin alternativa -----------------------------
+   * No hay tema claro. Un conmutador de tema son dos paletas que hay que
+   * mantener sincronizadas, y la segunda siempre se queda atrás: al tercer
+   * componente nuevo una de las dos tiene un color a ojo. Se elige una y se
+   * cuida.
+   *
+   * Y es un oscuro CÁLIDO, no un negro azulado. El negro puro contra texto
+   * claro produce halo —el ojo ve un contorno que no existe— y en una ventana
+   * donde se lee código durante horas eso cansa. Estos grises llevan un punto
+   * de rojo, que es lo que hace que se lean como papel apagado y no como una
+   * pantalla apagada. */
+  --paper:        #1F1E1C;   /* fondo de la aplicación */
+  --surface:      #292724;   /* tarjetas, paneles levantados */
+  --sunk:         #171614;   /* campos, código, zonas hundidas */
+  --rule:         #38352F;   /* filetes */
+  --rule-fuerte:  #4E4A42;
+
+  /* --- tinta -------------------------------------------------------------
+   * El texto principal NO es blanco puro. #FFFFFF sobre gris oscuro tiene más
+   * contraste del que hace falta y es lo que produce la sensación de pantalla
+   * que quema. Este blanco roto se queda en ~12:1, muy por encima de lo
+   * exigible, y descansa. */
+  --ink:          #EDE9E1;
+  --ink-suave:    #C9C4B9;
+  --muted:        #918C82;
+  --sobre-color:  #1A1917;   /* texto encima de un tono de rol */
+
+  /* --- los cinco roles: un tono cada uno, y de nadie más -----------------
+   * Subidos en luminosidad para el fondo oscuro. Se comprobó que los cinco se
+   * distinguen también en escala de grises: quien no separe bien los tonos
+   * sigue teniendo la posición y la etiqueta. */
+  --naoko:      #A6A2F0;   /* índigo   · clasifica y supervisa */
+  --melchior:   #5FC2B6;   /* verde azulado · construye la tesis */
+  --balthasar:  #E8927A;   /* terracota · refuta ejecutando */
+  --casper:     #CC93C0;   /* ciruela  · sintetiza */
+  --ritsuko:    #DDB65C;   /* ámbar    · audita */
+  --usuario:    #9FB6CC;   /* pizarra  · lo que escribe la persona */
+
+  /* --- estado: dicen algo, no decoran ------------------------------------ */
+  --ok:           #6FBF92;
+  --aviso:        #DEB255;
+  --fallo:        #E88478;
+  /* GRIS A PROPÓSITO. «Sin comprobar» no es un éxito tibio ni una alarma
+     suave: es la ausencia de información, y tiene que verse como tal. */
+  --incognita:    #8E8A80;
+
+  --ok-fondo:        #6FBF921F;
+  --aviso-fondo:     #DEB2551F;
+  --fallo-fondo:     #E884781F;
+  --incognita-fondo: #8E8A801F;
+
+  /* --- tipografía ------------------------------------------------------- */
+  --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas,
+          "Courier New", monospace;
+
+  /* Escala corta a propósito: seis tamaños bastan para toda la aplicación, y
+   * con seis nadie inventa un séptimo a ojo. Subidos medio punto respecto al
+   * original: sobre fondo oscuro el texto pequeño pierde peso. */
+  --t-micro: 11px;
+  --t-pie:   12px;
+  --t-menor: 13px;
+  --t-base:  14px;
+  --t-mayor: 16px;
+  --t-titulo: 20px;
+
+  /* --- ritmo: múltiplos de 4, sin excepciones --------------------------- */
+  --e1: 4px;  --e2: 8px;  --e3: 12px; --e4: 16px;
+  --e5: 24px; --e6: 32px; --e7: 48px;
+
+  --radio:   6px;
+  --radio-g: 10px;
+  --sombra:   0 1px 2px rgba(0, 0, 0, .35);
+  --sombra-g: 0 4px 16px rgba(0, 0, 0, .45);
+  --foco:     0 0 0 2px var(--paper), 0 0 0 4px var(--naoko);
+}
+
+/* Si alguien fuerza el atributo, no pasa nada: el tema es el mismo. Se deja
+   declarado para que quede claro que NO es un olvido. */
+:root[data-tema] { color-scheme: dark; }
+
+/* ------------------------------------------------------------------- base */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background-color: var(--vmagi-bg);
-  color: var(--vmagi-text);
-  font-family: var(--font-prose);
-  margin: 0;
-  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;                 /* la aplicación gestiona su scroll */
+}
+
+/* Números que no bailan. En una interfaz llena de contadores, medidas y
+   porcentajes que se refrescan, las cifras de ancho variable hacen que la
+   columna entera tiemble en cada actualización. */
+.mono, code, pre, kbd, samp, td.num, .cifra { font-variant-numeric: tabular-nums; }
+
+code, pre, kbd, samp, .mono {
+  font-family: var(--mono);
+  font-size: .92em;
+}
+
+a { color: var(--naoko); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+/* El foco SIEMPRE visible. Media aplicación se puede manejar por teclado y un
+   `outline: none` deja a quien lo hace sin saber dónde está. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+  border-radius: var(--radio);
+}
+
+::selection { background: color-mix(in srgb, var(--naoko) 25%, transparent); }
+
+/* --------------------------------------------------------------- scrollbar
+   Finas y del color de la regla: en una pantalla con cinco columnas, seis
+   barras de scroll gruesas son seis elementos compitiendo por la atención. */
+* { scrollbar-width: thin; scrollbar-color: var(--rule-fuerte) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--rule-fuerte); }
+
+/* ------------------------------------------------------------- primitivas */
+
+/* Etiqueta de sección: mayúsculas pequeñas, espaciadas, en gris. Es el único
+   recurso para titular una zona; así ninguna cabecera necesita color. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.regla { height: 1px; background: var(--rule); border: 0; margin: 0; }
+
+/* Píldora de estado. Cuatro y solo cuatro: cumple, avisa, falla, se ignora.
+   La cuarta existe para que nadie tenga que elegir entre pintar de verde algo
+   que no ha comprobado o no pintarlo. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: .04em;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.pill.ok        { color: var(--ok);        background: var(--ok-fondo); }
+.pill.aviso     { color: var(--aviso);     background: var(--aviso-fondo); }
+.pill.fallo     { color: var(--fallo);     background: var(--fallo-fondo); }
+.pill.incognita { color: var(--incognita); background: var(--incognita-fondo); }
+
+/* Un rol, un tono. Se aplica por atributo para que el marcado diga QUIÉN es
+   en vez de qué color lleva: `data-rol="CASPER"` sobrevive a un cambio de
+   paleta; `class="morado"` no. */
+/* EL ORDEN IMPORTA Y AQUÍ COSTÓ UNA PASADA ENTERA.
+   El comodín va PRIMERO. En la primera versión estaba al final, y como todos
+   estos selectores tienen la misma especificidad, ganaba el último: los cinco
+   roles quedaban en gris y ningún nombre salía con su tono. No fallaba nada
+   —el CSS era válido— simplemente la pantalla era monocroma y parecía una
+   decisión de diseño. Lo cazó mirar la ventana con una lupa. */
+[data-rol] { --rol: var(--muted); }        /* quien no se declara, no se tiñe */
+
+[data-rol="NAOKO"]     { --rol: var(--naoko); }
+[data-rol="MELCHIOR"]  { --rol: var(--melchior); }
+[data-rol="BALTHASAR"] { --rol: var(--balthasar); }
+[data-rol="CASPER"]    { --rol: var(--casper); }
+[data-rol="RITSUKO"]   { --rol: var(--ritsuko); }
+[data-rol="TU"], [data-rol="USUARIO"] { --rol: var(--usuario); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
 }

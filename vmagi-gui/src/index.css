@@ -1,4 +1,6 @@
-/* Vite styling reset */
-* {
-  box-sizing: border-box;
-}
+/* El sistema de diseño entra aquí y no en App.css a propósito: define los
+   tokens que todo lo demás consume, así que tiene que cargarse ANTES. Si se
+   importara desde App.css, cualquier hoja que se añada mañana y se importe
+   primero se encontraría las variables sin definir y caería a valores del
+   navegador — que es como aparece un botón blanco sobre papel blanco. */
+@import "./theme/magi.css";

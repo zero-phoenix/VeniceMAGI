@@ -40,24 +40,26 @@ export const AgentMessageCard = ({ msg, telemetry, renderCode }: any) => {
   }
 
   return (
-    <div className={`msg-card ${msg.agent.toLowerCase()}`} style={{ border: `1px solid var(--dim)`, background: 'rgba(10, 20, 25, 0.7)', marginBottom: '12px', borderRadius: '8px', overflow: 'hidden', width: '100%', boxSizing: 'border-box', flex: '0 0 auto' }}>
-      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid var(--dim)', fontSize: '11px', color: 'var(--dim)' }}>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <strong style={{ color: msg.agent === 'MELCHIOR' ? 'var(--var)' : msg.agent === 'BALTHASAR' ? 'var(--acc)' : msg.agent === 'CASPER' ? 'var(--fn)' : '#fff' }}>
-            {msg.agent}
-          </strong>
-          <span>[{msg.role}]</span>
+    <div className="msg-card" data-rol={msg.agent}>
+      <div className="card-header">
+        <div className="card-quien">
+          {/* La barra de color la pinta el CSS desde `data-rol`. Antes se
+              decidía aquí con un ternario de cuatro ramas que apuntaba a
+              `--var` y `--fn`, dos variables que no existen en ninguna hoja:
+              el nombre del nodo salía sin color y nadie lo había notado. */}
+          <strong className="card-agente">{msg.agent}</strong>
+          <span className="card-papel">{msg.role}</span>
         </div>
-        <div style={{ display: 'flex', gap: '15px' }}>
-          <span>⚙️ {msg.provider}</span>
+        <div className="card-meta">
+          <span className="mono">{msg.provider}</span>
           {telemetry?.find((t: any) => t.provider === msg.provider) && (
-            <span style={{ color: 'var(--node)' }}>
-              ⚡ {telemetry.find((t: any) => t.provider === msg.provider).avg_latency_ms.toFixed(0)}ms
+            <span className="mono card-latencia">
+              {telemetry.find((t: any) => t.provider === msg.provider).avg_latency_ms.toFixed(0)} ms
             </span>
           )}
         </div>
       </div>
-      <div className="card-body" style={{ padding: '12px', fontSize: '13px', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+      <div className="card-body">
         {msg.agent === 'USER' ? (
           <div>
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: renderCode }}>
@@ -67,7 +69,7 @@ export const AgentMessageCard = ({ msg, telemetry, renderCode }: any) => {
         ) : (
           <>
             {conclusion && (
-              <div className="card-conclusion-text" style={{ marginBottom: body ? '8px' : '0', color: '#cfe0e4', fontWeight: 400, fontSize: '13px', lineHeight: 1.55 }}>
+              <div className="card-conclusion-text">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: renderCode }}>
                   {conclusion}
                 </ReactMarkdown>
@@ -76,14 +78,12 @@ export const AgentMessageCard = ({ msg, telemetry, renderCode }: any) => {
 
             {body && (
               <div style={{ marginTop: '8px' }}>
-                <button 
-                  onClick={() => setIsExpanded(!isExpanded)} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--acc)', cursor: 'pointer', fontSize: '11px', padding: 0, fontWeight: 'bold' }}
-                >
+                <button className="card-mas"
+                  onClick={() => setIsExpanded(!isExpanded)}>
                   {isExpanded ? 'Ocultar análisis ▴' : 'Ver análisis completo ▾'}
                 </button>
                 {isExpanded && (
-                  <div className="card-body-text" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--dim)', color: '#cfe0e4', fontWeight: 400, fontSize: '13px', lineHeight: 1.55 }}>
+                  <div className="card-body-text">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: renderCode }}>
                       {body}
                     </ReactMarkdown>
