@@ -494,6 +494,63 @@ def register_studio_tools(reg: ToolRegistry) -> ToolRegistry:
                                 "genero_algo": r.genero_algo,
                                 "sembrado": sembrado})
 
+    @reg.tool("auditar_medidor",
+              "Fabrica un contraejemplo por cada eje de la biblia —material "
+              "que DEBE suspender— y comprueba que el medidor lo suspende por "
+              "ese eje. Un medidor al que nadie ataca no está medido: está "
+              "descrito. Solo informa; no ajusta nada.",
+              {"type": "object", "properties": {
+                  "referencia": {"type": "string"},
+                  "biblia": {"type": "string"},
+                  "carpeta": {"type": "string",
+                              "description": "dónde dejar el material adverso"}},
+               "required": ["referencia", "biblia", "carpeta"]},
+              access={"read", "write", "exec"}, dangerous=True)
+    async def auditar_medidor(referencia: str, biblia: str, carpeta: str,
+                              ctx=None):
+        """La auditoría del instrumento, y es trabajo de Ritsuko.
+
+        Audita, no arregla: fabrica el ataque, mira el veredicto y emite un
+        informe. No toca el medidor ni ajusta umbrales. Un auditor con permiso
+        para corregir el instrumento que audita deja de ser auditor a la
+        segunda vez que lo corrige.
+        """
+        from .adversario import ataca
+        from .estilo import BibliaDeEstilo, Tolerancia
+        ref = ctx.resolve(referencia) if ctx else Path(referencia)
+        bp = ctx.resolve(biblia) if ctx else Path(biblia)
+        dest = ctx.resolve(carpeta) if ctx else Path(carpeta)
+        if not bp.exists():
+            return ToolResult(False, "", error=f"no existe la biblia {bp}")
+        try:
+            crudo = json.loads(bp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            return ToolResult(False, "", error=f"biblia ilegible: {e}")
+        b = BibliaDeEstilo(
+            nombre=crudo.get("nombre", ""), origen=crudo.get("origen", ""),
+            procedencia=crudo.get("procedencia", "desconocida"),
+            tolerancias=[Tolerancia(**t) for t in crudo.get("tolerancias", [])])
+        if ctx and getattr(ctx, "journal", None):
+            ctx.journal.record(dest, "create", tool="auditar_medidor")
+
+        inf = await ataca(b, ref, dest)
+        cuerpo = [inf.render()]
+        if inf.escapados:
+            cuerpo.append("\nLO QUE SE LE ESCAPÓ, y qué significa:")
+            for a in inf.escapados:
+                cuerpo.append(
+                    f"  - {a.eje}: se fabricó {a.descripcion} y el veredicto "
+                    f"NO lo suspendió por ese eje. Cualquier corte que falle "
+                    f"así pasará la compuerta sin que nadie lo vea.")
+        return ToolResult(
+            inf.solido, "\n".join(cuerpo),
+            error=None if inf.solido else
+            f"{len(inf.escapados)} ejes ciegos",
+            meta={"solido": inf.solido,
+                  "escapados": [a.eje for a in inf.escapados],
+                  "sin_ataque": inf.no_atacados,
+                  "atacados": [a.eje for a in inf.ataques]})
+
     @reg.tool("cascaron_estado",
               "Dice qué sabe percibir esta máquina en local (escala de plano, "
               "identidad entre planos) y, si falta algo, exactamente qué "

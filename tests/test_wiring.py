@@ -210,6 +210,7 @@ WIRING = [
     ("AutoCorrectionLoop",     "vmagi/modules/studio/bucle.py",      "§5.8 el bucle del plan, con medicion real detras"),
     ("RightsGate",             "vmagi/modules/studio/bucle.py",      "§5.8 derechos comprobados ANTES de generar"),
     ("MediaSpec",              "vmagi/modules/studio/bucle.py",      "§5.8 el encargo se vuelve criterios duros"),
+    ("ataca",                  "vmagi/modules/studio/tools.py",      "§5.9 el enjambre audita su propio medidor"),
 ]
 
 

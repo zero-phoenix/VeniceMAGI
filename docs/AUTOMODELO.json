@@ -196,5 +196,23 @@
   "evidencia": "Antes: el bucle MEDIA la paleta -luma, saturacion, contraste- y no tenia con que moverla. Decia 'saturacion 0.470 y el objetivo es 0.2553, hay que BAJARLO' y volvia a montar la misma imagen igual de saturada, pasada tras pasada. Un bucle que diagnostica lo que no puede corregir gasta racion para repetir el mismo informe. VideoSpec.grado anade la etapa de etalonaje y el bucle la mueve con topes -eq admite saturacion 0-3, y dejar que se pase produce una imagen gris que ya no se parece a nada pero puede acertar por casualidad en el eje que se perseguia.",
   "veces_ok": 1,
   "veces_mal": 0
+ },
+ {
+  "texto": "El sistema fabrica sus propios contraejemplos y comprueba que su medidor los suspende",
+  "prueba": "adversario",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "studio/adversario.py: un ataque por eje de la biblia, cada uno una transformacion MINIMA de la propia referencia -lo que no se toca queda identico por construccion, no por buena intencion-. Medido: 7 de 7 ejes cazados. Y encontro tres fallos del medidor que ningun test veia: (1) un objeto claro cruzando un plano fijo se contaba como 2 cortes -3 planos donde hay 1- porque mi propia normalizacion estiraba por min/max y un pixel extremo remapeaba el histograma entero; (2) la saturacion se calculaba con pila.max(axis=3-1) sobre un array (n,alto,ancho,3), o sea por ANCHURA y no por canal: medía el recorrido de luminancia por fila de pixeles, un numero estable y plausible sin ninguna relacion con el color -pasar el video entero a gris solo lo movia de 0,313 a 0,262-; (3) un ataque flojo no prueba que el medidor sea ciego, prueba que el ataque era flojo, y confundirlo habria mandado a tocar el medidor.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "La saturacion medida es saturacion de color",
+  "prueba": "saturacion_es_color",
+  "estado": "sostenida",
+  "ultima": "2026-09-02 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA. `axis=3 - 1` queria decir 'el ultimo eje' y sobre un fotograma suelto lo habria sido; sobre la pila de fotogramas, el eje 2 es la anchura. Toda biblia construida antes de este arreglo llevaba un objetivo de saturacion que no medía color. Lo caza un test que compara un verde saturado con rejilla roja contra el mismo video en gris puro: antes 0,313 -> 0,262; ahora se desploma como tiene que desplomarse.",
+  "veces_ok": 1,
+  "veces_mal": 1
  }
 ]

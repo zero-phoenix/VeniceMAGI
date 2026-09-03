@@ -370,7 +370,7 @@ def _desplazamiento_global(a, b, maxd: int = BUSQUEDA_MAX):
     return magnitud, mejor, saturado
 
 
-def _histograma(gris, bins: int = 48):
+def _histograma(rgb, bins: int = 16):
     """Histograma NORMALIZADO en exposición, para que un corte sea un corte.
 
     EL ACOPLAMIENTO QUE ESTO ROMPE, ENCONTRADO EJECUTÁNDOLO
@@ -398,19 +398,101 @@ def _histograma(gris, bins: int = 48):
     fotogramas idénticos en un corte.
     """
     import numpy as np
-    g = np.asarray(gris, dtype=np.float32)
-    lo, hi = float(g.min()), float(g.max())
+    a = np.asarray(rgb, dtype=np.float32)
+    g = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
+    # PERCENTILES, NO MIN Y MAX. Y esto lo enseñó el adversario.
+    #
+    # La primera versión estiraba entre el mínimo y el máximo absolutos. Son
+    # dos valores que dependen de UN píxel cada uno, así que un objeto claro
+    # entrando o saliendo del cuadro cambia el máximo y remapea el histograma
+    # entero. Medido sobre un plano ÚNICO y continuo con un rectángulo claro
+    # cruzándolo: distancias de base 0,15 con dos picos de 0,70 justo cuando
+    # el objeto tocaba el borde. Tres planos donde hay uno.
+    #
+    # Es el fallo clásico de normalizar por extremos, y lo irónico es que
+    # apareció al arreglar OTRO fallo: la normalización se metió para que el
+    # etalonaje no borrase los cortes, y de paso inventó cortes nuevos. Un
+    # arreglo que crea el problema simétrico es medio arreglo.
+    # SE MIRA EL COLOR, NO SOLO LA LUMINANCIA. Y esto también lo enseñó el
+    # adversario, en el mismo sitio y con la ironía completa.
+    #
+    # La normalización de exposición se metió para que el etalonaje no borrase
+    # los cortes. Funcionó, y de paso borró otra cosa: si el histograma solo
+    # cuenta luminancia y además se normaliza, un corte entre dos planos de
+    # colores distintos pero brillo parecido se vuelve INVISIBLE.
+    #
+    # Medido sobre una animática de rojo -> verde -> azul con encadenados: el
+    # corte rojo/verde daba 0,242 de distancia, muy por debajo del umbral de
+    # 0,38, mientras el verde/azul daba 0,563. Un detector que ve unos cortes
+    # sí y otros no según los colores que se cruzan no es un detector.
+    #
+    # La solución conserva las dos propiedades a la vez: se calcula la escala
+    # de normalización sobre la LUMA y se aplica IGUAL a los tres canales. Un
+    # cambio global de exposición se cancela —los tres se mueven juntos—;
+    # una diferencia de tono sobrevive, porque lo que la define es la
+    # proporción ENTRE canales y esa no la toca una escala común.
+    lo, hi = np.percentile(g, (2.0, 98.0))
     if hi - lo > 12.0:
-        g = (g - lo) * (255.0 / (hi - lo))
-    h, _ = np.histogram(g, bins=bins, range=(0, 255))
+        a = np.clip((a - lo) * (255.0 / (hi - lo)), 0.0, 255.0)
+    trozos = [np.histogram(a[..., c], bins=bins, range=(0, 255))[0]
+              for c in range(3)]
+    h = np.concatenate(trozos).astype(np.float64)
     s = h.sum()
-    return h / s if s else h.astype(float)
+    return h / s if s else h
 
 
 def _distancia_hist(h1, h2) -> float:
     """Distancia L1 normalizada entre histogramas, de 0 a 1."""
     import numpy as np
     return float(np.abs(h1 - h2).sum() / 2.0)
+
+
+#: Cuánto tiene que destacar un pico sobre su vecindario para ser un corte.
+#: Un corte es un salto; un sujeto que cruza el cuadro es una MESETA.
+PROMINENCIA_CORTE = 2.2
+
+#: Muestras a cada lado que forman el vecindario. Con 4 a 5 fps son 0,8 s por
+#: lado: bastante para ver si el cambio es un pico o el estado normal de ese
+#: tramo, y poco para no meter dentro el corte siguiente.
+VECINDARIO_CORTE = 4
+
+
+def _destaca(distancias: list[float], i: int) -> bool:
+    """¿Es este pico un CORTE, o el ruido normal de un plano con movimiento?
+
+    EL FALSO POSITIVO QUE ESTO CIERRA, ENCONTRADO POR EL ADVERSARIO
+    ==============================================================
+    El umbral absoluto solo pregunta «¿cambió mucho la imagen?». Un corte
+    cambia mucho la imagen; un objeto claro y grande cruzando un plano fijo,
+    también. Medido sobre la referencia del adversario —un plano ÚNICO y
+    continuo, cámara clavada, con un rectángulo claro atravesando el cuadro—
+    el detector encontraba **3 planos donde hay 1**.
+
+    Y eso envenena todo lo que cuelga de ahí: la duración media de plano sale
+    a un tercio de la real, la biblia se construye con esa cifra, y el bucle
+    persigue un ritmo de montaje que nadie pidió.
+
+    La diferencia entre las dos cosas no está en la altura del pico, está en
+    su forma. Un corte es un SALTO: una muestra alta entre muestras bajas. Un
+    sujeto en movimiento es una MESETA: muchas muestras seguidas parecidas
+    entre sí, porque el objeto sigue cruzando. Se compara el pico con la
+    mediana de su vecindario y se exige que destaque.
+
+    La mediana y no la media, porque la media de un vecindario que contiene
+    otro corte se dispara y esconde el pico que se está juzgando.
+    """
+    n = len(distancias)
+    ini, fin = max(0, i - VECINDARIO_CORTE), min(n, i + VECINDARIO_CORTE + 1)
+    vecinos = sorted(distancias[j] for j in range(ini, fin) if j != i)
+    if not vecinos:
+        return True
+    mediana = vecinos[len(vecinos) // 2]
+    # Un vecindario prácticamente quieto no puede dividir por cero ni exigir
+    # una prominencia infinita: por debajo de este suelo, el umbral absoluto
+    # ya es criterio suficiente.
+    if mediana < 0.02:
+        return True
+    return distancias[i] >= mediana * PROMINENCIA_CORTE
 
 
 def _une_transiciones(picos: list[int]) -> list[int]:
@@ -510,14 +592,31 @@ async def _mide_imagen(ruta: Path, medida: MedidaEstilo) -> None:
         gpila = np.stack(grises)
         medida.luma = round(float(gpila.mean()), 2)
         medida.contraste = round(float(gpila.std()), 2)
-        mx = pila.max(axis=3 - 1)
-        mn = pila.min(axis=3 - 1)
+        # `axis=-1` ES EL CANAL. La primera versión ponía `axis=3 - 1`, o sea
+        # `axis=2`, con la intención de decir «el último». Sobre un fotograma
+        # suelto (alto, ancho, 3) habría sido correcto; sobre `pila`, que es
+        # (n, alto, ancho, 3), el eje 2 es LA ANCHURA.
+        #
+        # Así que la «saturación» medía el recorrido de luminancia a lo largo
+        # de cada fila de píxeles. Un número perfectamente estable, plausible
+        # y sin ninguna relación con el color: pasar el vídeo entero a gris
+        # con `hue=s=0` solo lo movía de 0,313 a 0,262, cuando tenía que
+        # desplomarse a cero.
+        #
+        # Lo encontró el adversario, y es exactamente para lo que existe: una
+        # métrica que devuelve cifras razonables mientras mide otra cosa no la
+        # caza mirar el código, la caza ponerle delante material que DEBE
+        # suspender y ver que no suspende.
+        mx = pila.max(axis=-1)
+        mn = pila.min(axis=-1)
         with np.errstate(divide="ignore", invalid="ignore"):
             sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0.0)
         medida.saturacion = round(float(sat.mean()), 4)
 
         # --- cortes ---------------------------------------------------------
-        hists = [_histograma(g) for g in grises]
+        # Sobre los fotogramas EN COLOR, no sobre los grises: un corte entre
+        # dos planos de tono distinto y brillo parecido no existe en luma.
+        hists = [_histograma(a) for a in arrays]
         distancias = [_distancia_hist(hists[i], hists[i + 1])
                       for i in range(len(hists) - 1)]
         # SE DESCARTAN LOS EXTREMOS, y no por comodidad.
@@ -534,7 +633,9 @@ async def _mide_imagen(ruta: Path, medida: MedidaEstilo) -> None:
         # muestra no se cuenta. Este instrumento no puede medir esa duración
         # de todas formas, así que no se pierde nada que se supiera.
         interior = range(1, max(1, len(distancias) - 1))
-        picos = [i for i in interior if distancias[i] > UMBRAL_CORTE]
+        picos = [i for i in interior
+                 if distancias[i] > UMBRAL_CORTE
+                 and _destaca(distancias, i)]
         cortes = _une_transiciones(picos)
         medida.planos = len(cortes) + 1
         if medida.duracion > 0:

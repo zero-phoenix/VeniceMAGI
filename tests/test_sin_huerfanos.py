@@ -145,6 +145,11 @@ TECHO = 83
 #: desglose, porque no basta con que lo añadido esté conectado: tiene que no
 #: duplicar lo que ya había—. Después a 59 al cablear `loop.py`, `spec.py` y
 #: `rights.py`, que llevaban señalados aquí desde el primer día.
+#: 2026-09-02 (tarde): entra `studio/adversario.py` y el desglose NO sube.
+#: Sus dos tipos públicos —`Ataque` e `InformeAdversario`— son el contrato de
+#: salida del auditor, y los tests los comprueban por tipo en vez de fiarse de
+#: los atributos: un auditor que devuelva dos formas distintas segun el
+#: resultado obliga a quien lo llama a adivinar.
 TECHOS_POR_PAQUETE = {"vmagi/modules": 59, "vmagi/core": 17,
                       "vmagi/venice": 6, "vmagi/repl": 2}
 

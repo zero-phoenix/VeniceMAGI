@@ -171,6 +171,79 @@ async def test_cuenta_los_cortes_que_hay(cuatro_planos):
     assert 1.6 <= m.duracion_media_plano <= 2.4, m.duracion_media_plano
 
 
+@sin_ffmpeg
+@sin_numpy
+async def test_un_sujeto_cruzando_el_cuadro_no_es_un_corte(camara_fija):
+    """Un plano ÚNICO y continuo tiene que medir UN plano.
+
+    EL FALSO POSITIVO QUE ESTE TEST FIJA, y lo encontró el adversario. El
+    umbral absoluto solo pregunta «¿cambió mucho la imagen?». Un corte cambia
+    mucho la imagen; un objeto claro y grande cruzando un plano fijo, también.
+    Medido: **3 planos donde hay 1**.
+
+    Y eso envenena todo lo que cuelga: la duración media de plano sale a un
+    tercio de la real, la biblia se construye con esa cifra, y el bucle
+    persigue un ritmo de montaje que nadie pidió.
+
+    La diferencia no está en la altura del pico sino en su forma: un corte es
+    un salto entre muestras bajas, un sujeto en movimiento es una meseta.
+    """
+    m = await E.medir(camara_fija, procedencia="obra")
+    assert m.planos == 1, (
+        f"un plano continuo con un objeto cruzándolo midió {m.planos} planos. "
+        f"El detector confunde movimiento de sujeto con montaje.")
+
+
+@sin_ffmpeg
+@sin_numpy
+async def test_un_video_en_gris_mide_saturacion_casi_cero(tmp_path_factory):
+    """El test que habría cazado el bug más silencioso de este módulo.
+
+    `pila.max(axis=3 - 1)` sobre un array (n, alto, ancho, 3) toma el máximo
+    por ANCHURA, no por canal. La «saturación» medía el recorrido de
+    luminancia a lo largo de cada fila de píxeles: un número estable,
+    plausible y sin ninguna relación con el color.
+
+    Medido antes del arreglo: pasar el vídeo entero a gris con `hue=s=0` solo
+    movía la cifra de 0,313 a 0,262. Una métrica que devuelve números
+    razonables mientras mide otra cosa no la caza leer el código — la caza
+    ponerle delante material que DEBE suspender y ver que no suspende.
+    """
+    d = tmp_path_factory.mktemp("gris")
+    color = _ffmpeg(
+        ["-f", "lavfi", "-i",
+         "color=c=0x1E9E4A:s=320x240:d=2:r=25,"
+         "drawgrid=w=40:h=40:t=3:c=0xE03030@0.9"],
+        d / "color.mp4")
+    gris = _ffmpeg(["-i", str(color), "-vf", "hue=s=0"], d / "gris.mp4")
+
+    con = await E.medir(color, procedencia="obra")
+    sin = await E.medir(gris, procedencia="obra")
+
+    assert con.saturacion is not None and sin.saturacion is not None
+    assert con.saturacion > 0.35, (
+        f"un verde saturado con rejilla roja midió {con.saturacion} de "
+        f"saturación: la métrica no está mirando el color")
+    assert sin.saturacion < 0.06, (
+        f"un vídeo en GRIS PURO midió {sin.saturacion} de saturación. La "
+        f"métrica no mide color.")
+    # Y lo que no se tocó, no se movió: el gris conserva la luminancia.
+    assert sin.luma == pytest.approx(con.luma, rel=0.20)
+
+
+def test_la_prominencia_distingue_un_salto_de_una_meseta():
+    """La función pura, sin arrancar FFmpeg."""
+    # Un corte: una muestra alta entre muestras quietas.
+    salto = [0.01, 0.01, 0.9, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+    assert E._destaca(salto, 2)
+    # Una meseta: todo el tramo alto porque algo grande está cruzando.
+    meseta = [0.5, 0.52, 0.55, 0.53, 0.51, 0.54, 0.5, 0.52, 0.53]
+    assert not E._destaca(meseta, 4), (
+        "una meseta de movimiento continuo se está tomando por un corte")
+    # Vecindario prácticamente quieto: el umbral absoluto ya basta.
+    assert E._destaca([0.0, 0.0, 0.6, 0.0, 0.0], 2)
+
+
 def test_el_etalonaje_entra_en_el_grafo_de_filtros():
     """La palanca de paleta tiene que llegar a FFmpeg, con y sin Ken Burns.
 
