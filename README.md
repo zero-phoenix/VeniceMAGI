@@ -298,7 +298,7 @@ set SEEDANCE_MODEL=seedance-2.5-text-to-video
 
 ## Qué sabe hacer
 
-El enjambre tiene **68 herramientas** reales sobre tu máquina, repartidas por
+El enjambre tiene **70 herramientas** reales sobre tu máquina, repartidas por
 rol y acotadas por dominio antes de entrar al prompt.
 
 * **Ingeniería de software**: crear, modificar y ejecutar código, empaquetar a
@@ -312,6 +312,13 @@ rol y acotadas por dominio antes de entrar al prompt.
   de FPS distinguibles.
 * **Fábrica de artefactos que se mira a sí misma**: especificar → generar →
   ejecutar/renderizar → **observar** → criticar → iterar.
+* **Taller de cine**: mide la dirección artística de un vídeo con una máquina
+  (aspecto real, duración de plano, movimiento de cámara, paleta, ritmo de los
+  turnos de diálogo), congela la referencia en una biblia de estilo y juzga
+  cada corte contra ella. Se **audita a sí mismo** con material fabricado para
+  suspenderlo, interroga a un perito de visión local con preguntas de control
+  que delatan las alucinaciones, y **busca** los parámetros de montaje por
+  evolución en vez de por reglas escritas a mano.
 * **Mundo real**: macro, geopolítica y finanzas con fuentes gratuitas y sin
   clave (FRED, BCE, Banco Mundial, SEC EDGAR).
 

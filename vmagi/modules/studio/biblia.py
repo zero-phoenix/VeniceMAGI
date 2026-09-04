@@ -105,6 +105,21 @@ class BibliaDeEstilo:
         from dataclasses import asdict
         return json.dumps(asdict(self), indent=2, ensure_ascii=False)
 
+    @classmethod
+    def desde_json(cls, crudo: str) -> BibliaDeEstilo:
+        """La vuelta de `to_json`. Aquí porque estaba escrita CUATRO veces.
+
+        Las mismas nueve líneas vivían copiadas en `animatica_hasta_cumplir`,
+        `auditar_medidor`, `juzgar_estilo` y la búsqueda. Cuatro copias de un
+        lector no son cuatro lectores: son cuatro sitios donde arreglar el día
+        que la biblia gane un campo, y tres de ellos se van a olvidar.
+        """
+        d = json.loads(crudo)
+        return cls(
+            nombre=d.get("nombre", ""), origen=d.get("origen", ""),
+            procedencia=d.get("procedencia", "desconocida"),
+            tolerancias=[Tolerancia(**t) for t in d.get("tolerancias", [])])
+
 
 @dataclass
 class Desvio:

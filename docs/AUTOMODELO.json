@@ -246,9 +246,45 @@
   "texto": "El jurado de tres IAs puede puntuar la imagen de un corte",
   "prueba": "jurado_de_imagen",
   "estado": "refutada",
-  "ultima": "2026-09-03 00:00",
-  "evidencia": "Lo presente como la ventaja de VeniceMAGI sobre un reward model entrenado: tres nodos que debaten mas un medidor, y ademas explican su nota. Pero los tres nodos son de TEXTO y no ven el video: solo pueden leer lo que el medidor les cuenta. No son una senal independiente, son la misma senal leida dos veces con pasos de mas. Un jurado donde tres de los cuatro miembros solo saben lo que les dijo el cuarto no es un jurado. Lo que SI pueden juzgar -y es real- es lo que el medidor no mira: si el guion tiene sentido y si el plan de planos sirve al encargo.",
+  "ultima": "2026-09-04 00:00",
+  "evidencia": "Lo presente como la ventaja de VeniceMAGI sobre un reward model entrenado: tres nodos que debaten mas un medidor, y ademas explican su nota. Pero los tres nodos son de TEXTO y no ven el video: solo pueden leer lo que el medidor les cuenta. No son una senal independiente, son la misma senal leida dos veces con pasos de mas. Un jurado donde tres de los cuatro miembros solo saben lo que les dijo el cuarto no es un jurado. Lo que SI pueden juzgar -y es real- es lo que el medidor no mira: si el guion tiene sentido y si el plan de planos sirve al encargo. | 2026-09-04: sigue REFUTADA y ya no es solo un diagnostico. El arreglo no fue anadir un cuarto razonador -seria el mismo error otra vez- sino un TESTIGO: perito.py, un modelo de vision local que mira los pixeles y contesta preguntas cerradas. Su valor no es ser bueno (pesa 250 MB) sino que su error es INDEPENDIENTE del error del medidor. Los tres nodos siguen juzgando lo que si pueden leer: guion y plan de planos.",
   "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "Un testimonio del perito que falla las preguntas de control se descarta entero",
+  "prueba": "contrainterrogatorio",
+  "estado": "sostenida",
+  "ultima": "2026-09-04 00:00",
+  "evidencia": "Cada tanda de preguntas lleva dentro preguntas de CONTROL cuya respuesta ya se sabe por medicion: si el medidor dice que el fotograma es verde y oscuro y el perito contesta rojo y claro, esta alucinando y se cae la tanda entera -incluida la respuesta util, que es el punto: una alucinacion no viene marcada, viene con la misma cara que un acierto. Sin controles el testimonio NO se usa: 'no he podido comprobarlo' no es 'esta bien'. El mecanismo es una funcion pura sobre un diccionario, asi que se comprueba entero sin instalar el modelo que alucina.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Buscar supera a las cuatro pasadas de reglas escritas a mano",
+  "prueba": "busqueda_contra_reglas",
+  "estado": "sostenida",
+  "ultima": "2026-09-04 00:00",
+  "evidencia": "Medido, no argumentado. Mismo mundo simulado (copiado de lo que hace ffmpeg de verdad: xfade acorta el plano, zoompan ES movimiento de camara, eq=contrast PIVOTA en el gris medio y por eso acopla luma y contraste), misma biblia y MISMO GENOMA para los dos: por eso las reglas salieron de dentro de la herramienta a reglas.py. Reglas a mano: distancia 0,7847. Busqueda: 0,0000 con menos de 200 evaluaciones, en tres semillas distintas. Se refuta si mil evaluaciones no bajan del liston.",
+  "veces_ok": 3,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Un paso de mutacion fijo basta para afinar",
+  "prueba": "paso_adaptativo",
+  "estado": "refutada",
+  "ultima": "2026-09-04 00:00",
+  "evidencia": "Refutada por su propia medicion, y la trampa era que GANABA. Con paso fijo del 12% del rango, 242 evaluaciones dejaban la distancia en 0,6023 contra el 0,7847 de las reglas: superaba al liston y parecia suficiente. Pero NO convergia aunque el optimo existiera y fuera alcanzable, por un motivo geometrico: la ventana que cumple la saturacion mide 0,10 y la zancada valia 0,26, asi que saltaba por encima del sitio al que queria llegar. Con la regla de un quinto de Rechenberg -abrir el paso si mejora, cerrarlo si no- converge a 0,0000. Ganar no era el objetivo; llegar si.",
+  "veces_ok": 0,
+  "veces_mal": 1
+ },
+ {
+  "texto": "Cegar al medidor puntua peor que medir fatal",
+  "prueba": "pena_sin_medir",
+  "estado": "sostenida",
+  "ultima": "2026-09-04 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA en la primera ejecucion de su propio test. La pena por un eje sin medir era 12 y la distancia medida crecia sin tope: una saturacion de 1,0 contra 0,30+-0,03 puntua 23,3, o sea que CEGAR AL MEDIDOR puntuaba mejor que medir fatal. Una busqueda con cientos de evaluaciones habria aprendido en una tarde a producir videos imposibles de medir -en negro, sin audio, de dos fotogramas- porque lo que no se mide no penaliza. Arreglado con una curva de saturacion que comprime [0,inf) en [0,PENA) sin perder pendiente. Tercera vez que la quinta regla se incumple en este repositorio: no basta con creersela, hay que dejar escrito el test.",
+  "veces_ok": 1,
   "veces_mal": 1
  }
 ]

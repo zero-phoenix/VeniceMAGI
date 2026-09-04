@@ -201,18 +201,39 @@ WIRING = [
     # interfaz: un instrumento que solo se puede llamar desde fuera no le
     # sirve al enjambre, y el objetivo es que el sistema haga sin supervisión
     # lo mismo que se hace supervisándolo.
-    ("medir",                  "vmagi/modules/studio/tools.py",      "§5.6 el enjambre mide el estilo de un vídeo"),
-    ("BibliaDeEstilo",         "vmagi/modules/studio/tools.py",      "§5.6 la referencia se congela en biblia"),
-    ("compara",                "vmagi/modules/studio/tools.py",      "§5.6 el corte se juzga contra la biblia"),
-    ("informe_cascaron",       "vmagi/modules/studio/tools.py",      "§5.7 el enjambre sabe qué percibe su maquina"),
+    #
+    # 2026-09-03: estas entradas apuntaban a `studio/tools.py`. El taller de
+    # cine llegó a nueve herramientas y ese fichero pasó de 800 líneas, así
+    # que se partió: `herramientas_estilo.py` registra las de medir y juzgar,
+    # y `tools.py` sigue siendo la fábrica de artefactos y llama al otro. El
+    # requisito de la regla 3 no cambia —siguen entrando al registro del
+    # enjambre por un solo sitio—; cambia el fichero desde el que se invocan.
+    ("medir",                  "vmagi/modules/studio/herramientas_estilo.py", "§5.6 el enjambre mide el estilo de un vídeo"),
+    # Antes esta fila decía `BibliaDeEstilo` y pasaba porque tres herramientas
+    # CONSTRUÍAN la biblia a mano, cada una con su copia de las mismas nueve
+    # líneas. Al unificar la lectura en `BibliaDeEstilo.desde_json`, el grafo
+    # de llamadas dejó de ver el nombre de la clase —registra `n.func.attr`,
+    # o sea `desde_json`— y la fila se cayó. El cableado no se rompió: lo que
+    # estaba mal era la fila, que apuntaba a una duplicación.
+    ("desde",                  "vmagi/modules/studio/herramientas_estilo.py", "§5.6 la referencia se congela en biblia"),
+    ("desde_json",             "vmagi/modules/studio/herramientas_estilo.py", "§5.6 la biblia se lee de disco por un solo sitio"),
+    ("compara",                "vmagi/modules/studio/herramientas_estilo.py", "§5.6 el corte se juzga contra la biblia"),
+    ("informe_cascaron",       "vmagi/modules/studio/herramientas_estilo.py", "§5.7 el enjambre sabe qué percibe su maquina"),
     ("detecta_rostros",        "vmagi/modules/studio/estilo.py",     "§5.7 escala de plano desde el cascaron local"),
-    ("rueda_hasta_cumplir",    "vmagi/modules/studio/tools.py",      "§5.8 bucle de autocorreccion invocable"),
+    ("rueda_hasta_cumplir",    "vmagi/modules/studio/herramientas_estilo.py", "§5.8 bucle de autocorreccion invocable"),
     ("AutoCorrectionLoop",     "vmagi/modules/studio/bucle.py",      "§5.8 el bucle del plan, con medicion real detras"),
     ("RightsGate",             "vmagi/modules/studio/bucle.py",      "§5.8 derechos comprobados ANTES de generar"),
     ("MediaSpec",              "vmagi/modules/studio/bucle.py",      "§5.8 el encargo se vuelve criterios duros"),
-    ("ataca",                  "vmagi/modules/studio/tools.py",      "§5.9 el enjambre audita su propio medidor"),
-    ("mina",                   "vmagi/modules/studio/tools.py",      "§5.10 curacion de corpus desde el enjambre"),
-    ("CriterioDeGenero",       "vmagi/modules/studio/tools.py",      "§5.10 el genero se declara con umbrales, no a ojo"),
+    ("ataca",                  "vmagi/modules/studio/herramientas_estilo.py", "§5.9 el enjambre audita su propio medidor"),
+    ("mina",                   "vmagi/modules/studio/herramientas_estilo.py", "§5.10 curacion de corpus desde el enjambre"),
+    ("CriterioDeGenero",       "vmagi/modules/studio/herramientas_estilo.py", "§5.10 el genero se declara con umbrales, no a ojo"),
+    ("register_style_tools",   "vmagi/modules/studio/tools.py",      "§5.6 un solo punto de entrada al registro"),
+    # §5.11 — megaplan v4. Los dos módulos que cierran los dos agujeros que la
+    # autoauditoría encontró: el jurado no ve (perito) y las cuatro pasadas de
+    # reglas a mano no son una optimización (búsqueda).
+    ("interroga",              "vmagi/modules/studio/herramientas_estilo.py", "§5.11 el perito declara y se le contrainterroga"),
+    ("busca",                  "vmagi/modules/studio/herramientas_estilo.py", "§5.11 busqueda evolutiva invocable desde el enjambre"),
+    ("compara",                "vmagi/modules/studio/busqueda.py",   "§5.11 el medidor ES la funcion de aptitud"),
 ]
 
 
