@@ -298,7 +298,7 @@ set SEEDANCE_MODEL=seedance-2.5-text-to-video
 
 ## Qué sabe hacer
 
-El enjambre tiene **66 herramientas** reales sobre tu máquina, repartidas por
+El enjambre tiene **68 herramientas** reales sobre tu máquina, repartidas por
 rol y acotadas por dominio antes de entrar al prompt.
 
 * **Ingeniería de software**: crear, modificar y ejecutar código, empaquetar a

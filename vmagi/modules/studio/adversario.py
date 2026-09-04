@@ -156,14 +156,43 @@ class InformeAdversario:
         return [a for a in self.ataques if a.ruta and not a.aplicable]
 
     @property
+    def sospecha_de_ceguera(self) -> bool:
+        """¿Y si el instrumento no mira nada, en vez de mirarlo todo bien?
+
+        EL AGUJERO QUE ESTO CIERRA, Y LO ENCONTRÓ SU PROPIO TEST.
+        =========================================================
+        Al añadir la comprobación de «¿el ataque movió el eje?» —que existe
+        para no acusar al medidor cuando el flojo era el ataque— apareció el
+        caso simétrico: **un medidor que devuelve siempre lo mismo produce
+        exactamente el mismo informe que siete ataques que no atacan.**
+
+        Se detectó cegando el medidor a propósito en un test. Antes de este
+        arreglo, el adversario contestaba «sólido frente a 0 ataques
+        efectivos» y daba la firma. Un auditor que aprueba un instrumento
+        roto es peor que no tener auditor: da la firma sin haber mirado.
+
+        La salida es estadística y es la honesta: siete transformaciones
+        deliberadamente brutales —arrancar el color, doblar el brillo, romper
+        el encuadre, mover la cámara— no pueden fallar TODAS sobre el mismo
+        material. Si ninguna mueve su eje, lo que no se mueve es el
+        instrumento.
+        """
+        vivos = [a for a in self.ataques if a.ruta]
+        return bool(vivos) and all(not a.aplicable for a in vivos)
+
+    @property
     def solido(self) -> bool:
         """El medidor es sólido si ningún ataque fabricado se le escapó.
 
         No dice «el medidor es correcto»: dice «no falló en lo que se le
         probó». Los ejes de `no_atacados` siguen sin comprobar, y eso se
         imprime en vez de contarse como aprobado.
+
+        Y no puede ser sólido si se sospecha ceguera: aprobar por ausencia de
+        fallos cuando la ausencia se debe a que nadie miró es exactamente la
+        quinta regla del proyecto al revés.
         """
-        return not self.escapados
+        return not self.escapados and not self.sospecha_de_ceguera
 
     def render(self) -> str:
         lineas = []
@@ -172,6 +201,12 @@ class InformeAdversario:
         for e in self.no_atacados:
             lineas.append(f"  ????  {e:<22} sin ataque conocido: SIN COMPROBAR")
         vivos = [a for a in self.ataques if a.ruta and a.aplicable]
+        if self.sospecha_de_ceguera:
+            return ("MEDIDOR CIEGO: ninguno de los "
+                    f"{len([a for a in self.ataques if a.ruta])} ataques movió "
+                    "su eje. Siete transformaciones brutales no pueden fallar "
+                    "todas: lo que no se mueve es el instrumento.\n"
+                    + "\n".join(a.render() for a in self.ataques))
         cab = (f"medidor SÓLIDO frente a {len(vivos)} ataques efectivos"
                if self.solido else
                f"MEDIDOR CIEGO en {len(self.escapados)} de "

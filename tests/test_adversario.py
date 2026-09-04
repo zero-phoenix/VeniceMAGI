@@ -208,8 +208,26 @@ async def test_un_medidor_ciego_se_declara_ciego(referencia, tmp_path,
     inf = await A.ataca(biblia, referencia, tmp_path / "at5")
 
     assert not inf.solido, "aprobó un medidor que no mira nada"
-    assert inf.escapados
     assert "MEDIDOR CIEGO" in inf.render()
+
+    # Y SE DETECTA POR LA VÍA CORRECTA, que no es la evidente.
+    #
+    # Un medidor cegado devuelve siempre lo mismo, así que la comprobación de
+    # «¿el ataque movió el eje?» dice que no lo movió — y el adversario, sin
+    # esta guarda, concluía «el ataque era flojo» y firmaba: «sólido frente a
+    # 0 ataques efectivos». El caso simétrico del ataque flojo, y da el mismo
+    # informe exactamente.
+    #
+    # La salida es estadística: siete transformaciones brutales no pueden
+    # fallar TODAS sobre el mismo material. Si ninguna mueve su eje, lo que no
+    # se mueve es el instrumento.
+    assert inf.sospecha_de_ceguera, (
+        "el medidor cegado pasó por «los ataques eran flojos». Un auditor que "
+        "aprueba un instrumento roto es peor que no tener auditor: da la "
+        "firma sin haber mirado.")
+    assert not inf.escapados, (
+        "con el medidor cegado ningún ataque llega a considerarse efectivo, "
+        "así que la ceguera NO puede detectarse por la lista de escapados")
 
 
 # ============================================ alcanzable desde el enjambre

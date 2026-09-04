@@ -227,10 +227,28 @@
  {
   "texto": "Un denoiser propio de un solo genero es alcanzable; uno general no",
   "prueba": "especialista_frente_a_generalista",
-  "estado": "sin_comprobar",
-  "ultima": "",
-  "evidencia": "Investigado el 2026-09-03. La atencion completa espacio-temporal cuesta O(T^2*S^2) y toda la arquitectura de estos modelos existe para esquivar ese exponente: Seedance desacopla capas espaciales y temporales y las cose con ventanas desplazadas; LTX hace lo contrario -comprime a 1:192 moviendo el patchify al VAE hasta que la atencion completa vuelve a caber-; Wan 2.2 parte el calendario de ruido en dos expertos por SNR; HunyuanVideo 1.5 decide la dispersion en ejecucion con SSTA. El coste real esta auditado: Open-Sora 2.0 documenta 200.000 dolares para un modelo GENERAL. Un especialista de camara fija e interiores tiene una distribucion de datos varios ordenes de magnitud menor y casi no tiene que modelar movimiento de camara, que es la mitad de la dificultad. La hipotesis es que baja a cientos de euros. SIN COMPROBAR: hasta que el escalon cero -un DiT de juguete entrenado en la propia GTX 1050 sobre formas que se mueven- demuestre que el andamiaje esta bien cosido, alquilar una GPU seria pagar por descubrir un bug.",
+  "estado": "refutada",
+  "ultima": "2026-09-03 00:00",
+  "evidencia": "REFUTADA POR LA LITERATURA, no por un test. El plan proponia entrenar un DiT propio de 200-400 M sobre un corpus de un genero, entre 300 y 1.500 EUR de GPU alquilada. La respuesta correcta es LoRA sobre un modelo abierto, y existe publicada haciendo ESTE caso de uso: 'Fine-Tuning Open Video Generators for Cinematic Scene Synthesis' adapta Wan 2.1 I2V-14B a la estetica de una serie concreta con un conjunto compacto de clips cortos, en horas y sobre una sola GPU, en dos etapas que desacoplan estilo de movimiento. Precio medido: 4-5 $ por 1000 pasos y 2000 pasos recomendados como maximo, o sea ~10 $. Dos ordenes de magnitud por debajo de mi estimacion, y el error no era de calculo sino de encuadre: pregunte como construir un modelo cuando la pregunta era como especializar uno. Lo encontro BUSCAR SI ALGUIEN YA LO HABIA HECHO, que es la version bibliografica de lo que el adversario hace con el medidor, y me la salte tres documentos seguidos.",
   "veces_ok": 0,
-  "veces_mal": 0
+  "veces_mal": 1
+ },
+ {
+  "texto": "El minero trocea por los cortes REALES, no por reparto regular",
+  "prueba": "fronteras_reales",
+  "estado": "sostenida",
+  "ultima": "2026-09-03 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA en 24 horas. La primera version pedia a medir() cuantos planos hay y repartia el metraje en partes IGUALES, con un comentario propio que lo llamaba 'una aproximacion de decimas'. No lo era: una pelicula con planos de 2, 20 y 5 segundos se troceaba en tres pedazos de 9, y cada pedazo cruzaba cortes reales -o los rechazaba el criterio, o entraban al corpus con una etiqueta que describia otra cosa. Un corpus mal troceado no da un modelo peor: da un modelo que aprende otra pelicula. El dato existia dentro de _mide_imagen desde el principio; solo no salia. MedidaEstilo.cortes_s lo expone y el test pega tres planos de 2, 20 y 5 s y exige que ningun tramo se coma un corte.",
+  "veces_ok": 1,
+  "veces_mal": 1
+ },
+ {
+  "texto": "El jurado de tres IAs puede puntuar la imagen de un corte",
+  "prueba": "jurado_de_imagen",
+  "estado": "refutada",
+  "ultima": "2026-09-03 00:00",
+  "evidencia": "Lo presente como la ventaja de VeniceMAGI sobre un reward model entrenado: tres nodos que debaten mas un medidor, y ademas explican su nota. Pero los tres nodos son de TEXTO y no ven el video: solo pueden leer lo que el medidor les cuenta. No son una senal independiente, son la misma senal leida dos veces con pasos de mas. Un jurado donde tres de los cuatro miembros solo saben lo que les dijo el cuarto no es un jurado. Lo que SI pueden juzgar -y es real- es lo que el medidor no mira: si el guion tiene sentido y si el plan de planos sirve al encargo.",
+  "veces_ok": 0,
+  "veces_mal": 1
  }
 ]

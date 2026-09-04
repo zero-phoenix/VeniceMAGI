@@ -175,13 +175,22 @@ async def _fronteras(ruta: Path) -> list[tuple[float, float]]:
     if dur <= 0:
         raise EstiloError("el fichero no declara duración utilizable")
 
-    planos = max(1, int(m.planos or 1))
-    # `medir` da el NÚMERO de planos, no dónde caen. Para el troceo hace falta
-    # lo segundo, así que se reparte de forma regular y se declara: es una
-    # aproximación, y en material de planos largos y parecidos —que es
-    # exactamente este género— el error es de décimas.
-    largo = dur / planos
-    cortes = [(i * largo, (i + 1) * largo) for i in range(planos)]
+    # LAS FRONTERAS REALES, no un reparto regular.
+    #
+    # La primera versión pedía el NÚMERO de planos y repartía el metraje en
+    # partes iguales, con un comentario que lo llamaba «una aproximación de
+    # décimas». No lo era: una película con planos de 2, 20 y 5 segundos se
+    # troceaba en tres pedazos de 9, y cada pedazo cruzaba cortes reales. Esos
+    # clips o los rechazaba el criterio —por tener cortes dentro— o entraban
+    # al corpus con una etiqueta que describía otra cosa. Un corpus mal
+    # troceado no da un modelo peor: da un modelo que aprende otra película.
+    #
+    # `medir()` ya sabía dónde caían los cortes; solo no lo decía.
+    marcas = [0.0] + list(m.cortes_s or []) + [dur]
+    # Se ordena y se limpia por si una transición gradual dejó dos marcas
+    # pegadas: un plano de cero segundos no es un plano.
+    marcas = sorted({round(x, 3) for x in marcas if 0.0 <= x <= dur})
+    cortes = [(marcas[i], marcas[i + 1]) for i in range(len(marcas) - 1)]
 
     # Se parten los planos largos y se descartan los cortísimos.
     salida: list[tuple[float, float]] = []

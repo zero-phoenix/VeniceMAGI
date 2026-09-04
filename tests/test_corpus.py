@@ -133,6 +133,59 @@ def test_sin_medida_de_camara_no_se_acepta_por_omision():
     assert "no se pudo medir" in motivo
 
 
+# ================================================= dónde se corta
+
+@sin_ffmpeg
+@sin_numpy
+async def test_las_fronteras_caen_donde_estan_los_cortes(tmp_path_factory):
+    """EL FALLO QUE ESTE TEST FIJA, Y ES EL PEOR QUE HE ESCRITO.
+
+    La primera versión pedía a `medir()` cuántos planos hay y repartía el
+    metraje en partes IGUALES, con un comentario que lo llamaba «una
+    aproximación de décimas». No lo era.
+
+    Aquí se pegan tres planos de 2, 20 y 5 segundos. Con el reparto regular
+    salían tres pedazos de 9 s, y cada uno cruzaba cortes reales: el primero
+    se comía el plano corto entero más media parte del largo. Esos clips o los
+    rechazaba el criterio —por tener cortes dentro— o entraban al corpus con
+    una etiqueta que describía otra cosa.
+
+    **Un corpus mal troceado no da un modelo peor: da un modelo que aprende
+    otra película.** Y el dato correcto existía dentro del medidor desde el
+    principio; solo no salía.
+    """
+    d = tmp_path_factory.mktemp("fronteras")
+    partes = []
+    for i, (color, dur) in enumerate((("0x802020", 2), ("0x208020", 20),
+                                      ("0x202080", 5))):
+        partes += ["-f", "lavfi", "-i",
+                   f"color=c={color}:s=320x240:d={dur}:r=25,"
+                   f"drawgrid=w={30 + i * 14}:h={30 + i * 14}:t=3:c=white@0.7"]
+    partes += ["-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+               "-map", "[v]"]
+    v = _ffmpeg(partes, d / "tres_planos.mp4")
+
+    m = await E.medir(v, procedencia="obra")
+    assert m.planos == 3, f"midió {m.planos} planos donde hay 3"
+    assert len(m.cortes_s) == 2, (
+        f"la medida no dice DÓNDE caen los cortes: {m.cortes_s}")
+    # Los cortes reales están en 2 s y en 22 s. El muestreo es de 5 fps, así
+    # que la resolución es de 0,2 s: se admite medio segundo de holgura.
+    assert m.cortes_s[0] == pytest.approx(2.0, abs=0.5), m.cortes_s
+    assert m.cortes_s[1] == pytest.approx(22.0, abs=0.5), m.cortes_s
+
+    tramos = await C._fronteras(v)
+    # El plano de 2 s cae por debajo del mínimo y se descarta; el de 20 s se
+    # parte porque pasa del máximo; el de 5 s entra entero.
+    assert tramos, "no salió ningún tramo"
+    for ini, fin in tramos:
+        # Ningún tramo puede contener un corte por dentro: eso es exactamente
+        # lo que el reparto regular hacía mal.
+        for c in m.cortes_s:
+            assert not (ini + 0.3 < c < fin - 0.3), (
+                f"el tramo {ini:.1f}-{fin:.1f}s se come el corte de {c:.1f}s")
+
+
 # ================================================= el minado
 
 @sin_ffmpeg
