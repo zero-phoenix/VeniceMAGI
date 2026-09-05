@@ -52,7 +52,8 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
               {"type": "object", "properties": {
                   "path": {"type": "string"},
                   "procedencia": {
-                      "type": "string", "enum": ["obra", "trailer", "generado"],
+                      "type": "string",
+                      "enum": ["obra", "trailer", "generado", "sintetica"],
                       "description": "de un tráiler no vale la duración de "
                                      "plano: la corta el montador del tráiler"}},
                "required": ["path"]}, access={"read", "exec"})
@@ -280,7 +281,7 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
                   "out_path": {"type": "string"},
                   "nombre": {"type": "string"},
                   "procedencia": {"type": "string",
-                                  "enum": ["obra", "trailer", "generado"]},
+                                  "enum": ["obra", "trailer", "generado", "sintetica"]},
                   "holgura": {"type": "number",
                               "description": "desvío admitido, en fracción "
                                              "del propio valor (0.15 = 15%)"}},
@@ -310,11 +311,74 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
             aviso = ("\nNOTA: procedencia tráiler. La duración de plano y las "
                      "medidas de mezcla NO entran: las decide el montador del "
                      "tráiler, no el director.")
+        # LO QUE LA REFERENCIA NO DA DERECHO A EXIGIR se dice AQUÍ, al fabricar
+        # la biblia, y no solo al usarla. Enterarse de que el objetivo de
+        # duración de plano salió de un clip sin cortes después de una noche
+        # de búsqueda es enterarse tarde.
+        objeciones = b.avisos_de_dominio()
+        if objeciones:
+            aviso += ("\nOJO, ejes que esta referencia NO respalda:\n"
+                      + "\n".join(f"  · {o}" for o in objeciones))
         return ToolResult(
             True,
             f"biblia '{nombre}' con {len(b.tolerancias)} ejes -> {destino}\n"
             f"{ejes}{aviso}",
-            meta={"path": str(destino), "ejes": len(b.tolerancias)})
+            meta={"path": str(destino), "ejes": len(b.tolerancias),
+                  "avisos_de_dominio": objeciones})
+
+    @reg.tool("combinar_biblias",
+              "Une varias biblias de estilo en una por INTERSECCIÓN eje a eje: "
+              "se queda con lo que todas exigen a la vez. Nunca promedia, y "
+              "los ejes donde dos referencias se contradicen los declara.",
+              {"type": "object", "properties": {
+                  "biblias": {"type": "array", "items": {"type": "string"}},
+                  "out_path": {"type": "string"},
+                  "nombre": {"type": "string"}},
+               "required": ["biblias", "out_path"]},
+              access={"read", "write"}, dangerous=True)
+    async def combinar_biblias(biblias: list, out_path: str, ctx=None,
+                               nombre: str = "combinada"):
+        from .biblia import combina
+        cargadas, fallos = [], []
+        for ruta in biblias:
+            bp = ctx.resolve(ruta) if ctx else Path(ruta)
+            b, err = _carga_biblia(bp)
+            if b is None:
+                fallos.append(f"{ruta}: {err}")
+            else:
+                cargadas.append(b)
+        if fallos:
+            # NO se combina lo que se pudo leer y se ignora el resto. Una
+            # biblia combinada a la que le falta una de sus fuentes es MENOS
+            # estricta que la que se pidió, y no lo parece.
+            return ToolResult(False, "", error="; ".join(fallos))
+        if not cargadas:
+            return ToolResult(False, "", error="ninguna biblia que combinar")
+
+        fusion = combina(cargadas, nombre=nombre)
+        destino = ctx.resolve(out_path) if ctx else Path(out_path)
+        if ctx and getattr(ctx, "journal", None):
+            ctx.journal.record(destino, "create", tool="combinar_biblias")
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(fusion.to_json(), encoding="utf-8", newline="\n")
+
+        cuerpo = [f"biblia '{nombre}' con {len(fusion.tolerancias)} ejes de "
+                  f"{len(cargadas)} referencias -> {destino}"]
+        cuerpo += [f"  {t.eje} = {t.objetivo:.4g}±{t.margen:.3g}"
+                   for t in fusion.tolerancias]
+        if fusion.conflictos:
+            cuerpo.append("\nEJES RETIRADOS POR CONTRADICCIÓN (no se promedian, "
+                          "decide una persona cuál de las dos películas haces):")
+            cuerpo += [f"  · {c.render()}" for c in fusion.conflictos]
+        objeciones = fusion.avisos_de_dominio()
+        if objeciones:
+            cuerpo.append("\nOJO, ejes que el material combinado NO respalda:")
+            cuerpo += [f"  · {o}" for o in objeciones]
+        return ToolResult(
+            True, "\n".join(cuerpo),
+            meta={"path": str(destino), "ejes": len(fusion.tolerancias),
+                  "conflictos": [c.eje for c in fusion.conflictos],
+                  "avisos_de_dominio": objeciones})
 
     @reg.tool("juzgar_estilo",
               "Mide un vídeo generado y lo enfrenta a una biblia de estilo "
@@ -417,8 +481,8 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
     # presupuesto hace sola. El tope queda alto para que nunca sea él quien
     # pare la búsqueda.
     @reg.tool("buscar_parametros",
-              "Evoluciona los parámetros de montaje usando el medidor como "
-              "aptitud, hasta agotar el plazo. Sin gradientes ni VRAM.",
+              "Evoluciona el montaje con el medidor como aptitud, hasta "
+              "agotar el plazo. Sin gradientes ni VRAM.",
               {"type": "object", "properties": {
                   "imagenes": {"type": "array", "items": {"type": "string"}},
                   "biblia": {"type": "string"},
@@ -426,6 +490,10 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
                   "presupuesto_s": {"type": "number",
                                     "description": "plazo en segundos; es lo "
                                                    "que de verdad limita"},
+                  "auditado": {"type": "boolean",
+                               "description": "pon true SOLO si acabas de "
+                                              "pasar auditar_medidor sobre "
+                                              "esta misma biblia"},
                   "semilla": {"type": "integer"}},
                "required": ["imagenes", "biblia", "out_dir"]},
               access={"read", "write", "exec"}, dangerous=True)
@@ -433,8 +501,9 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
                                 ctx=None, poblacion: int = 10,
                                 generaciones: int = 200,
                                 presupuesto_s: float = 900.0,
+                                auditado: bool = False,
                                 semilla: int = 0):
-        from .busqueda import Genoma, busca
+        from .busqueda import ALTO_PROXY, ANCHO_PROXY, Genoma, busca
         from .video import Slide, VideoSpec, render_slideshow
         bp = ctx.resolve(biblia) if ctx else Path(biblia)
         b, err = _carga_biblia(bp)
@@ -446,11 +515,13 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
         if not fuentes:
             return ToolResult(False, "", error="sin imágenes no hay qué montar")
 
-        async def generar(g: Genoma, idx: int):
-            salida = destino / f"cand-{idx:03d}-{g.firma}.mp4"
-            spec = VideoSpec(
+        def _spec(g: Genoma, ancho: int, alto: int) -> VideoSpec:
+            return VideoSpec(
                 slides=[Slide(f, g.segundos_plano) for f in fuentes],
+                width=ancho, height=alto,
                 ken_burns=g.ken_burns, crossfade=g.crossfade, grado=g.grado)
+
+        async def _monta(spec: VideoSpec, salida: Path):
             if spec.validate():
                 return None            # candidato inválido: no es un fallo
             if ctx and getattr(ctx, "journal", None):
@@ -461,14 +532,32 @@ def register_style_tools(reg: ToolRegistry) -> ToolRegistry:
                 return None
             return salida if salida.exists() else None
 
+        async def generar(g: Genoma, idx: int):
+            # PROXY. El medidor mira a 128 px de ancho: montar el candidato a
+            # 1920 para que lo tire a 128 es pagar cien veces por el mismo dato.
+            return await _monta(_spec(g, ANCHO_PROXY, ALTO_PROXY),
+                                destino / f"cand-{idx:03d}-{g.firma}.mp4")
+
         f = await busca(b, generar, poblacion=int(poblacion),
                         generaciones=int(generaciones),
                         presupuesto_s=float(presupuesto_s),
-                        semilla=int(semilla))
+                        auditado=bool(auditado), semilla=int(semilla))
+
+        # CONFORMADO: el ganador se vuelve a montar a tamaño real. Entregar el
+        # proxy sería entregar el borrador con el que se decidió, que es
+        # exactamente lo que un montaje con proxies NO hace.
+        conformado = None
+        if f.mejor is not None:
+            conformado = await _monta(_spec(f.mejor.genoma, 1920, 1080),
+                                      destino / "ganador-1080.mp4")
         return ToolResult(
-            f.mejor is not None, f.render(),
+            f.mejor is not None,
+            f.render() + (f"\nconformado a 1920x1080 -> {conformado}"
+                          if conformado else ""),
             error=None if f.mejor else "ningún candidato llegó a evaluarse",
-            meta={"mejor": None if not f.mejor else f.mejor.ruta,
+            meta={"mejor": str(conformado) if conformado else (
+                      f.mejor.ruta if f.mejor else None),
+                  "proxy": f.mejor.ruta if f.mejor else None,
                   "distancia": None if not f.mejor else f.mejor.distancia,
                   "evaluaciones": f.evaluaciones,
                   "historial": f.historial})

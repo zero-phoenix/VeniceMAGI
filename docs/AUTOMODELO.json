@@ -286,5 +286,41 @@
   "evidencia": "REFUTADA Y ARREGLADA en la primera ejecucion de su propio test. La pena por un eje sin medir era 12 y la distancia medida crecia sin tope: una saturacion de 1,0 contra 0,30+-0,03 puntua 23,3, o sea que CEGAR AL MEDIDOR puntuaba mejor que medir fatal. Una busqueda con cientos de evaluaciones habria aprendido en una tarde a producir videos imposibles de medir -en negro, sin audio, de dos fotogramas- porque lo que no se mide no penaliza. Arreglado con una curva de saturacion que comprime [0,inf) en [0,PENA) sin perder pendiente. Tercera vez que la quinta regla se incumple en este repositorio: no basta con creersela, hay que dejar escrito el test.",
   "veces_ok": 1,
   "veces_mal": 1
+ },
+ {
+  "texto": "Combinar dos biblias es quedarse con lo que las dos exigen a la vez",
+  "prueba": "interseccion_de_biblias",
+  "estado": "sostenida",
+  "ultima": "2026-09-05 00:00",
+  "evidencia": "Promediar es lo primero que se le ocurre a cualquiera y esta mal por el mismo motivo que fusionar dos LoRAs promediando pesos: el punto medio entre dos direcciones no apunta a ninguna. Con numeros: una referencia pide planos de 8+-1 y otra de 2+-0,3; el promedio es 5, un valor que no describe NINGUNA de las dos peliculas y que tiene aspecto de dato medido. `combina()` interseca los intervalos, y cuando la interseccion esta vacia RETIRA el eje del contrato y lo declara en `conflictos` — un contrato imposible de cumplir no es exigente, es un bucle que no para. El test barre 200 valores y exige que la combinada nunca apruebe algo que una fuente rechazaba.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Una biblia sabe que ejes no respalda su propio material",
+  "prueba": "dominio_de_la_biblia",
+  "estado": "sostenida",
+  "ultima": "2026-09-05 00:00",
+  "evidencia": "Una biblia sacada de un plano suelto de seis segundos trae un duracion_media_plano perfectamente medido: seis. Con ella, una pelicula de tres minutos suspende entera — no porque este mal, sino porque la referencia no tenia ni un corte. El numero era correcto; la extrapolacion no. `Dominio` guarda MEDIDAS del material (duracion, planos, audio, rostros), no etiquetas, y avisa sin suspender: descontar seria decidir por quien juzga y callar seria dejarle perseguir toda la noche un objetivo sacado de un trozo.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "Un proxy a 640x360 mide lo mismo que el montaje a 1920x1080",
+  "prueba": "proxy_de_busqueda",
+  "estado": "sostenida",
+  "ultima": "2026-09-05 00:00",
+  "evidencia": "El medidor reduce todo a 128 px antes de mirar, asi que montar un candidato a 1920 para tirarlo a 128 es pagar cien veces por el mismo dato. Medido en la misma maquina, cinco laminas: 640x360 monta en 12,7 s y mide en 5,6 s; 1920x1080 monta en 151,8 s y mide en 5,3 s. 8,6 veces por candidato, y fijate donde esta el coste: medir cuesta lo mismo, lo que explota es montar. El argumento podia ser falso —un reescalado de 1920 a 128 no promedia igual que uno de 640— asi que se comprueba eje a eje en vez de razonarse. Tambien se probo bajar el preset del codificador: las medidas aguantaban pero el ahorro era del 10%, y un proxy que se codifica distinto del original hay que volver a validarlo cada vez que alguien toca el codificador.",
+  "veces_ok": 1,
+  "veces_mal": 0
+ },
+ {
+  "texto": "vmagi.modules.studio.biblia se puede importar el primero",
+  "prueba": "sin_ciclo_biblia_estilo",
+  "estado": "refutada",
+  "ultima": "2026-09-05 00:00",
+  "evidencia": "REFUTADA Y ARREGLADA. `estilo.py` reexporta al final lo de `biblia.py` y `biblia.py` importaba `MedidaEstilo` de `estilo.py`: un ciclo. No se veia porque TODOS los llamadores del repositorio importan `estilo` primero, que es el orden que lo deshace por casualidad. Lo destapo el primer test que importo `biblia` directamente. Un ciclo que solo aguanta porque nadie ha probado el otro orden no esta resuelto: esta sin tocar. Arreglado con TYPE_CHECKING, que es lo correcto porque ahi `MedidaEstilo` solo aparece en anotaciones.",
+  "veces_ok": 0,
+  "veces_mal": 1
  }
 ]

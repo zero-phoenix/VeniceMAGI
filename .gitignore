@@ -30,6 +30,11 @@ vmagi-gui/.npm/
 scratch/
 *.log
 
+# Salida de scripts/corrida_cine.py: vídeos, stills y candidatos de la
+# búsqueda. Son megas de material regenerable con un comando, y meterlos en
+# git convertiría cada corrida en un commit de cien megas.
+corrida-cine/
+
 # PyInstaller
 dist/
 build/

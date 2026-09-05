@@ -126,6 +126,45 @@ UMBRAL_ZOOM = 0.012
 APERTURA, CIERRE = 1.18, 0.80
 ESCALA_MIN, ESCALA_MAX = 0.02, 2.5
 
+#: Anchura a la que se generan los CANDIDATOS de la búsqueda. El ganador se
+#: vuelve a montar a tamaño real.
+#:
+#: POR QUÉ, Y POR QUÉ NO ES HACER TRAMPA
+#: =====================================
+#: El medidor reduce cada fotograma a `ANCHO_ANALISIS` (128 px) antes de mirar
+#: nada. Montar un candidato a 1920 para que el instrumento lo tire a 128 es
+#: pagar cien veces por un dato idéntico — y en una búsqueda son cientos de
+#: candidatos, así que ahí se va la noche entera.
+#:
+#: Es el mismo truco que lleva usando el montaje de cine desde que existe el
+#: vídeo digital: se trabaja con PROXIES de baja resolución y se conforma al
+#: final a resolución completa. Aquí encaja todavía mejor, porque el que mira
+#: es una máquina y ya sabemos exactamente a qué tamaño mira.
+#:
+#: Sigue siendo 16:9 y múltiplo de 16: cambiar la relación de aspecto entre el
+#: proxy y el montaje final invalidaría justo el eje que más se nota.
+#:
+#: MEDIDO, no estimado. Cinco láminas, cinco planos, mismo genoma:
+#:
+#:     640x360 .... montar  12,7 s  ·  medir 5,6 s  ·  total  18,3 s
+#:     1920x1080 .. montar 151,8 s  ·  medir 5,3 s  ·  total 157,1 s
+#:
+#: 8,6 veces por candidato. En una noche eso es la diferencia entre doscientas
+#: evaluaciones y veinte. Y fíjate dónde está el coste: MEDIR cuesta lo mismo
+#: en los dos (el instrumento reduce a 128 igual); lo que explota es montar.
+#:
+#: También se probó bajar el preset del codificador para los proxies. Las
+#: medidas aguantaban (saturación 0,2012 contra 0,2017) pero el ahorro era del
+#: 10%, así que NO se hace: proxy y montaje final se codifican exactamente
+#: igual. Un proxy que se genera de otra manera que el original es un proxy en
+#: el que hay que volver a confiar cada vez que alguien toca el codificador,
+#: y ese es un precio altísimo por un 10%.
+#:
+#: LA CONDICIÓN: que proxy y montaje final midan lo mismo. No se da por
+#: supuesto — `test_el_proxy_mide_lo_mismo_que_el_montaje_final` lo comprueba
+#: eje a eje, y si un día deja de ser cierto, esta constante sobra.
+ANCHO_PROXY, ALTO_PROXY = 640, 360
+
 #: Rangos de cada gen. Fuera de esto no se muta: no por elegancia, sino porque
 #: `VideoSpec.validate()` rechaza planos más cortos que el fundido y un
 #: `eq=contrast=0` produce un fotograma plano que el medidor lee como negro.
@@ -234,13 +273,16 @@ def _satura(d: float) -> float:
     return PENA_SIN_MEDIR * d / (d + PENA_SIN_MEDIR)
 
 
-def distancia_de_veredicto(v: Veredicto) -> float:
-    if not v.desvios:
+def distancia_de_veredicto(v: Veredicto,
+                           imposibles: frozenset[str] | None = None) -> float:
+    imposibles = imposibles or frozenset()
+    contables = [d for d in v.desvios if d.eje not in imposibles]
+    if not contables:
         # Sin contrato no hay distancia que medir, y devolver 0.0 —«perfecto»—
         # sería la peor respuesta posible: haría ganar a cualquier candidato.
         return PENA_SIN_MEDIR
     total = 0.0
-    for d in v.desvios:
+    for d in contables:
         if d.obtenido is None:
             total += PENA_SIN_MEDIR
             continue
@@ -252,7 +294,48 @@ def distancia_de_veredicto(v: Veredicto) -> float:
             continue
         margen = abs(d.margen) or 1e-6
         total += _satura(abs(d.obtenido - d.objetivo) / margen)
-    return round(total / len(v.desvios), 6)
+    return round(total / len(contables), 6)
+
+
+def ejes_imposibles(veredictos: list[Veredicto]) -> frozenset[str]:
+    """Ejes que NINGÚN candidato de la primera hornada pudo producir.
+
+    EL FALLO QUE ESTO CIERRA, ENCONTRADO EN LA PRIMERA CORRIDA DE VERDAD
+    ====================================================================
+    La biblia salió de un vídeo con sonido y traía cuatro ejes de audio. El
+    generador de la búsqueda monta una animática a partir de imágenes fijas y
+    **no puede producir sonido, nunca**. Resultado medido: distancia 4,0075,
+    de la cual 3,64 era la penalización fija de esos cuatro ejes y solo 0,37
+    era lo que la búsqueda podía arreglar. La noche entera puesta a mover un
+    número dominado por una constante.
+
+    LA DISTINCIÓN QUE HACE QUE ESTO NO SEA UN AGUJERO
+    =================================================
+    `PENA_SIN_MEDIR` existe para que la búsqueda no aprenda a CEGAR al medidor
+    —producir vídeos en negro, de dos fotogramas, mudos— porque lo que no se
+    mide no penaliza. Esa defensa sigue en pie, y esta función no la toca:
+
+      · Si un eje se le escapa a ALGUNOS candidatos, es una estrategia y se
+        paga entera. Un candidato que se queda mudo cuando sus hermanos suenan
+        está esquivando el contrato.
+      · Si se le escapa a TODOS los de la primera hornada, no es estrategia:
+        es que el contrato le pide al generador algo que no sabe hacer. Eso no
+        se castiga en silencio para siempre, se DECLARA — y quien lea el
+        informe decide si cambia el generador o quita el eje.
+
+    La diferencia entre las dos es exactamente la diferencia entre «no lo hizo»
+    y «no podía», y es la misma que este proyecto lleva media docena de
+    sesiones aprendiendo a no confundir.
+    """
+    if not veredictos:
+        return frozenset()
+    sin_medir = None
+    for v in veredictos:
+        aqui = {d.eje for d in v.desvios if d.obtenido is None}
+        sin_medir = aqui if sin_medir is None else (sin_medir & aqui)
+        if not sin_medir:
+            break
+    return frozenset(sin_medir or ())
 
 
 # ------------------------------------------------------------------ candidato
@@ -368,6 +451,9 @@ class Frontera:
     #: normalmente, la que consiguen las cuatro pasadas de reglas a mano.
     liston: float | None = None
     aviso_auditoria: str = ""
+    #: Ejes que ningún candidato de la primera hornada pudo producir. Salen del
+    #: cómputo de la distancia a partir de la segunda generación, y se dicen.
+    imposibles: list[str] = field(default_factory=list)
 
     @property
     def supera_al_liston(self) -> bool | None:
@@ -407,6 +493,14 @@ class Frontera:
             lineas.append(
                 f"  AVISO: {self.fallos_de_generacion} candidatos no llegaron "
                 f"a generarse. Eso es el generador, no la dirección artística.")
+        if self.imposibles:
+            lineas.append(
+                f"  FUERA DEL ALCANCE DE ESTE GENERADOR, y por eso no se "
+                f"puntúan: {', '.join(sorted(self.imposibles))}.\n"
+                f"  Ningún candidato de la primera hornada pudo producirlos, "
+                f"así que no es que la búsqueda no lo intente: es que el "
+                f"contrato le pide algo que este generador no sabe hacer. O "
+                f"cambias el generador, o quitas esos ejes de la biblia.")
         if self.aviso_auditoria:
             lineas.append(f"  AVISO: {self.aviso_auditoria}")
         return "\n".join(lineas)
@@ -462,6 +556,9 @@ async def busca(
     actual = [Candidato(g) for g in siembra(
         base or Genoma(), biblia, dados, poblacion)]
 
+    imposibles: frozenset[str] = frozenset()
+    primeros: list[Veredicto] = []
+
     async def _evalua(c: Candidato, idx: int) -> None:
         clave = c.genoma.firma
         if clave in vistos:
@@ -475,7 +572,9 @@ async def busca(
         c.ruta = str(destino)
         m = await medidor(destino, procedencia="generado")
         v = compara(m, biblia)
-        c.distancia = distancia_de_veredicto(v)
+        if not f.imposibles and len(primeros) < poblacion:
+            primeros.append(v)
+        c.distancia = distancia_de_veredicto(v, imposibles)
         c.incumplidos = len(v.incumplidos)
         vistos[clave] = c.distancia
         f.evaluaciones += 1
@@ -486,6 +585,25 @@ async def busca(
             await _evalua(c, i)
             if presupuesto_s and time.monotonic() - arranque > presupuesto_s:
                 break
+
+        if gen == 1 and primeros:
+            # Se decide AQUÍ y no antes: hace falta la hornada entera para
+            # distinguir «este candidato no lo produjo» de «ninguno puede».
+            imposibles = ejes_imposibles(primeros)
+            if imposibles:
+                f.imposibles = sorted(imposibles)
+                # Y se REPUNTÚA la primera hornada con el contrato corregido.
+                # Dejarla con la puntuación vieja haría que la élite de la
+                # generación 2 se eligiera con una vara distinta de la de sus
+                # rivales, que es la manera más silenciosa de romper una
+                # búsqueda: el mejor histórico ya no sería comparable.
+                vistos.clear()
+                for c in actual:
+                    if c.evaluado and c.ruta:
+                        m = await medidor(c.ruta, procedencia="generado")
+                        c.distancia = distancia_de_veredicto(
+                            compara(m, biblia), imposibles)
+                        vistos[c.genoma.firma] = c.distancia
 
         vivos = [c for c in actual if c.evaluado]
         mejoro = False

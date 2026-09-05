@@ -35,6 +35,8 @@ puede probar generando mil vídeos no se prueba nunca.
 """
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -364,6 +366,74 @@ async def test_un_generador_roto_se_diagnostica_como_generador_roto():
     assert "no la dirección artística" in f.render()
 
 
+async def test_un_eje_que_NINGUN_candidato_puede_producir_deja_de_puntuar():
+    """EL FALLO QUE ENCONTRÓ LA PRIMERA CORRIDA DE VERDAD.
+
+    La biblia salió de un vídeo con sonido y traía cuatro ejes de audio. El
+    generador monta una animática de imágenes fijas y no puede producir sonido
+    JAMÁS. Medido: distancia 4,0075, de la cual 3,64 era la penalización fija
+    de esos cuatro ejes y 0,37 lo único que la búsqueda podía mover. La noche
+    entera puesta a empujar una constante.
+    """
+    b = BibliaDeEstilo(tolerancias=[
+        Tolerancia(eje="saturacion", objetivo=0.30, margen=0.03),
+        Tolerancia(eje="fraccion_silencio", objetivo=0.74, margen=0.09),
+        Tolerancia(eje="turnos_por_minuto", objetivo=8.9, margen=1.1)])
+
+    async def medidor_mudo(ruta, *, procedencia="generado"):
+        # Mide la imagen perfectamente y no tiene pista de audio: exactamente
+        # lo que devuelve el montador de animáticas.
+        return MedidaEstilo(saturacion=0.30 + 0.02 * (hash(str(ruta)) % 5))
+
+    async def generar(g: S.Genoma, idx: int):
+        return _apunta(g)
+
+    f = await S.busca(b, generar, poblacion=6, generaciones=3, semilla=1,
+                      medidor=medidor_mudo, auditado=True)
+
+    assert set(f.imposibles) == {"fraccion_silencio", "turnos_por_minuto"}, (
+        f"no reconoció los ejes que el generador no puede producir: "
+        f"{f.imposibles}")
+    assert f.mejor.distancia < S.PENA_SIN_MEDIR / 2, (
+        f"la distancia sigue dominada por lo que nadie puede arreglar: "
+        f"{f.mejor.distancia}")
+    assert "FUERA DEL ALCANCE" in f.render()
+    assert "cambias el generador" in f.render(), (
+        "no dice qué hacer. Un aviso que no señala la salida es ruido")
+
+
+async def test_un_eje_que_solo_ALGUNOS_esquivan_se_sigue_pagando_entero():
+    """LA DEFENSA QUE NO SE PUEDE TOCAR AL ARREGLAR LO ANTERIOR.
+
+    Si un eje se le escapa a algunos candidatos y a otros no, es una
+    ESTRATEGIA: el candidato mudo está esquivando el contrato mientras sus
+    hermanos lo cumplen. Eso se paga entero, o la búsqueda aprende en una
+    tarde a producir vídeos imposibles de medir.
+    """
+    b = BibliaDeEstilo(tolerancias=[
+        Tolerancia(eje="saturacion", objetivo=0.30, margen=0.03),
+        Tolerancia(eje="luma", objetivo=90.0, margen=8.0)])
+    visto = {"n": 0}
+
+    async def medidor_a_ratos(ruta, *, procedencia="generado"):
+        visto["n"] += 1
+        # Uno de cada tres se queda sin luma: no es una imposibilidad del
+        # generador, es un candidato concreto que no la produjo.
+        if visto["n"] % 3 == 0:
+            return MedidaEstilo(saturacion=0.30)
+        return MedidaEstilo(saturacion=0.55, luma=90.0)
+
+    async def generar(g: S.Genoma, idx: int):
+        return _apunta(g)
+
+    f = await S.busca(b, generar, poblacion=6, generaciones=2, semilla=1,
+                      medidor=medidor_a_ratos, auditado=True)
+
+    assert f.imposibles == [], (
+        "dio por imposible un eje que la mayoría de los candidatos SÍ produjo. "
+        "Con eso, esquivar la medición vuelve a ser una estrategia ganadora")
+
+
 async def test_sin_auditar_el_medidor_la_busqueda_lo_dice():
     """Una búsqueda optimiza lo que se le mide. Si el medidor tiene un punto
     ciego, esto lo encuentra — y quien lea el informe tiene que saberlo antes
@@ -374,6 +444,86 @@ async def test_sin_auditar_el_medidor_la_busqueda_lo_dice():
     f = await S.busca(_biblia_de_una_pelicula(), generar, poblacion=4,
                       generaciones=2, medidor=_medidor_falso)
     assert "adversario" in f.render().lower()
+
+
+# ============================================== la condición que valida el proxy
+
+@pytest.mark.slow
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
+                    reason="hace falta ffmpeg para montar los dos tamaños")
+async def test_el_proxy_mide_lo_mismo_que_el_montaje_final(tmp_path):
+    """LA CONDICIÓN DE LA QUE DEPENDE `ANCHO_PROXY`.
+
+    La búsqueda evalúa candidatos a 640x360 y conforma el ganador a 1920x1080,
+    con el argumento de que el medidor reduce todo a 128 px de ancho antes de
+    mirar y por tanto el tamaño del montaje no puede cambiar el resultado.
+
+    El argumento es bueno y podría ser falso: el reescalado no es una
+    identidad, y un pase de 1920 a 128 no promedia igual que uno de 640 a 128.
+    Si esta comprobación cae, la optimización es inválida —la búsqueda estaría
+    eligiendo por un número distinto del que luego se entrega— y `ANCHO_PROXY`
+    sobra. Por eso se mide en vez de razonarse.
+    """
+    from vmagi.modules.studio.estilo import (
+        medir,
+        numpy_disponible,
+        pillow_disponible,
+    )
+    from vmagi.modules.studio.video import Slide, VideoSpec, render_slideshow
+
+    if not (numpy_disponible() and pillow_disponible()):
+        pytest.skip("hace falta numpy y Pillow para mirar los fotogramas")
+
+    laminas = []
+    for i, (fondo, barra) in enumerate((("0x4A6B58", "0xD8CBB0"),
+                                        ("0x6B5340", "0xC9D2C4"),
+                                        ("0x40515F", "0xE0D2B8"))):
+        p = tmp_path / f"l{i}.png"
+        r = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", f"color=c={fondo}:s=1280x720",
+             "-f", "lavfi", "-i", f"color=c={barra}:s=180x{260 + i * 70}",
+             "-filter_complex",
+             f"[0:v]drawgrid=w=90:h=90:t=2:c=0x2E2C28@0.55[bg];"
+             f"[bg][1:v]overlay=x={150 + i * 220}:y=120[v]",
+             "-map", "[v]", "-frames:v", "1", str(p)],
+            capture_output=True, timeout=120)
+        assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-400:]
+        laminas.append(str(p))
+
+    # Planos cortos y cadencia baja A PROPÓSITO: lo que se compara es el
+    # TAMAÑO del montaje, y el coste de montar a 1080p sube con el número de
+    # fotogramas. Medido: 5 láminas de 4 s a 30 fps tardan 151 s en montarse a
+    # 1920x1080. Un test que tarda dos minutos y medio deja de correrse.
+    # A 5 fps de muestreo, 1,6 s por plano siguen dando ocho muestras: de
+    # sobra para que el corte se vea.
+    g = S.Genoma(segundos_plano=1.6, crossfade=0.4, zoom=0.0,
+                 brillo=-0.05, contraste=1.15, saturacion=0.7)
+
+    medidas = {}
+    for etiqueta, (an, al) in (("proxy", (S.ANCHO_PROXY, S.ALTO_PROXY)),
+                               ("final", (1920, 1080))):
+        salida = tmp_path / f"{etiqueta}.mp4"
+        spec = VideoSpec(slides=[Slide(x, g.segundos_plano) for x in laminas],
+                         width=an, height=al, fps=15, ken_burns=g.ken_burns,
+                         crossfade=g.crossfade, grado=g.grado)
+        assert not spec.validate()
+        await render_slideshow(spec, salida)
+        medidas[etiqueta] = await medir(salida, procedencia="generado")
+
+    p, f = medidas["proxy"], medidas["final"]
+    assert p.aspecto == pytest.approx(f.aspecto, rel=0.02)
+    assert p.planos == f.planos, (
+        f"el proxy ve {p.planos} planos y el montaje final {f.planos}: la "
+        f"búsqueda estaría optimizando un montaje distinto del que se entrega")
+    assert p.saturacion == pytest.approx(f.saturacion, abs=0.02)
+    assert p.luma == pytest.approx(f.luma, abs=4.0)
+    assert p.contraste == pytest.approx(f.contraste, rel=0.15)
+    # El movimiento se mide en píxeles de la imagen YA reducida a 128, así que
+    # también tiene que sobrevivir. Es el eje con más motivos para no hacerlo:
+    # el remuestreo desde 1920 suaviza más que desde 640.
+    assert p.fraccion_camara_fija == pytest.approx(
+        f.fraccion_camara_fija, abs=0.1)
 
 
 # ==================================================== alcanzable desde el enjambre
